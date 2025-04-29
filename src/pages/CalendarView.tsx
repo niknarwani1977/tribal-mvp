@@ -62,10 +62,22 @@ const CalendarView: React.FC = () => {
 
       <div className="flex flex-col md:flex-row justify-center gap-6">
         <div>
-          <Calendar
-            onChange={setSelectedDate}
-            value={selectedDate}
-          />
+         <Calendar
+  onChange={setSelectedDate}
+  value={selectedDate}
+  tileContent={({ date, view }) => {
+    if (view === 'month') {
+      const dayStr = date.toISOString().split('T')[0];
+      const hasEvent = events.some(event => event.date === dayStr);
+      return hasEvent ? (
+        <div className="flex justify-center mt-1">
+          <span className="w-2 h-2 bg-[#004b6e] rounded-full"></span>
+        </div>
+      ) : null;
+    }
+    return null;
+  }}
+/>
         </div>
 
         <div className="flex-1">
