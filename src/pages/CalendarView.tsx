@@ -62,22 +62,34 @@ const CalendarView: React.FC = () => {
 
       <div className="flex flex-col md:flex-row justify-center gap-6">
         <div>
-         <Calendar
+        <Calendar
+  // Handle the date user clicks on
   onChange={setSelectedDate}
+  // Highlight the currently selected date
   value={selectedDate}
+  
+  // Customize each tile (day box) inside the calendar
   tileContent={({ date, view }) => {
+    // Only modify the month view (not year/decade views)
     if (view === 'month') {
+      // Convert date to YYYY-MM-DD string format
       const dayStr = date.toISOString().split('T')[0];
+      
+      // Check if any event matches this date
       const hasEvent = events.some(event => event.date === dayStr);
+
+      // If there is an event on this day, show a small blue dot 🔵
       return hasEvent ? (
         <div className="flex justify-center mt-1">
           <span className="w-2 h-2 bg-[#004b6e] rounded-full"></span>
         </div>
-      ) : null;
+      ) : null; // Otherwise, don't render anything
     }
+    
     return null;
   }}
 />
+
         </div>
 
         <div className="flex-1">
