@@ -14,65 +14,63 @@ const Notifications: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) throw new Error('User not logged in');
+  const fetchNotifications = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not logged in');
 
-        // Fetch user's Circle ID
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
+      // Fetch user's Circle ID
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
 
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          const circleId = userData.circleId;
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        const circleId = userData.circleId;
 
-          if (!circleId) {
-            throw new Error('User is not part of a Circle');
-          }
-
-          // Fetch Notifications for the user's Circle
-          const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
-          const querySnapshot = await getDocs(q);
-
-          const fetchedNotifications: Notification[] = [];
-          querySnapshot.forEach((doc) => {
-            fetchedNotifications.push({
-              id: doc.id,
-              ...doc.data(),
-            } as Notification);
-          });
-
-          // Sort notifications by newest first
-          fetchedNotifications.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
-
-          setNotifications(fetchedNotifications);
-          // After setting notifications:
-            if (user && fetchedNotifications.length > 0) {
-              const batch = fetchedNotifications.map(async (notif) => {
-                const notifRef = doc(db, "notifications", notif.id);
-                const notifSnap = await getDoc(notifRef);
-                const notifData = notifSnap.data();
-
-    if (notifData && (!notifData.readBy || !notifData.readBy.includes(user.uid))) {
-      await notifRef.update({
-        readBy: [...(notifData.readBy || []), user.uid],
-      });
-    }
-  });
-
-  await Promise.all(batch);
-}
+        if (!circleId) {
+          throw new Error('User is not part of a Circle');
         }
-      } catch (error: any) {
-        console.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchNotifications();
-  }, []);
+        // Fetch Notifications for the user's Circle
+        const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
+        const querySnapshot = await getDocs(q);
+
+        const fetchedNotifications: Notification[] = [];
+        const markAsReadBatch = []; // <-- New batch to update read status
+
+        querySnapshot.forEach((docSnap) => {
+          const notifData = docSnap.data();
+          fetchedNotifications.push({
+            id: docSnap.id,
+            ...notifData,
+          } as Notification);
+
+          // If the notification has NOT been read by current user
+          if (!notifData.readBy || !notifData.readBy.includes(user.uid)) {
+            // Queue up an update to add current user ID
+            markAsReadBatch.push(doc(db, "notifications", docSnap.id));
+          }
+        });
+
+        setNotifications(fetchedNotifications);
+
+        // Batch update notifications to mark them as read
+        for (const notifRef of markAsReadBatch) {
+          await updateDoc(notifRef, {
+            readBy: [...(fetchedNotifications.find(n => n.id === notifRef.id)?.readBy || []), user.uid],
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchNotifications();
+}, []);
+
 
   return (
     <div className="min-h-screen flex flex-col items-center px-4 bg-[#fef9f4]">
