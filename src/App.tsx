@@ -36,7 +36,7 @@ function App() {
             <Route path="/notifications" element={<Notifications />} />
 	    <Route path="/create-circle" element={<CreateCircle />} />
 	    <Route path="/create-event" element={<CreateEvent />} />
-	    <Route path="/calendar" element={<CalendarView />}
+	    <Route path="/calendar" element={<CalendarView />} />
           </Routes>
         </div>
         <Navbar items={navItems} />
