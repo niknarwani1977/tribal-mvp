@@ -1,122 +1,109 @@
+// src/pages/CreateEvent.tsx
 import React, { useState } from 'react';
-import { Calendar, MapPin, Users, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { db, auth } from "../firebase";
+import { collection, addDoc, Timestamp, doc, getDoc } from "firebase/firestore";
 
-const CreateEvent = () => {
-  const [eventData, setEventData] = useState({
-    title: '',
-    date: '',
-    time: '',
-    location: '',
-    circle: '',
-    members: [] as string[],
-  });
+const CreateEvent: React.FC = () => {
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Handle event creation
-    console.log('Event data:', eventData);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not logged in');
+
+      // Fetch user's circleId from Firestore
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        const circleId = userData.circleId;
+
+        if (!circleId) {
+          throw new Error('User is not part of any Circle.');
+        }
+
+        // Save the event inside the "events" collection
+        await addDoc(collection(db, "events"), {
+          title,
+          date,
+          time,
+          notes,
+          circleId,
+          createdByUID: user.uid,
+          createdAt: Timestamp.now()
+        });
+
+        alert("Event created successfully!");
+        navigate('/calendar'); // Redirect after creation
+      } else {
+        throw new Error('User document not found');
+      }
+    } catch (err: any) {
+      console.error(err.message);
+      setError(err.message);
+    }
   };
 
   return (
-    <div className="p-4 space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-gray-900">Create Event</h1>
-        <p className="text-gray-600">Schedule a new event for your circle</p>
-      </header>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-              Event Title
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                id="title"
-                className="pl-10 w-full rounded-lg border border-gray-300 focus:ring-[#004b6e] focus:border-[#004b6e]"
-                placeholder="e.g., Soccer Practice Pickup"
-                value={eventData.title}
-                onChange={(e) => setEventData({ ...eventData, title: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                Date
-              </label>
-              <input
-                type="date"
-                id="date"
-                className="w-full rounded-lg border border-gray-300 focus:ring-[#004b6e] focus:border-[#004b6e]"
-                value={eventData.date}
-                onChange={(e) => setEventData({ ...eventData, date: e.target.value })}
-              />
-            </div>
-            <div>
-              <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
-                Time
-              </label>
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="time"
-                  id="time"
-                  className="pl-10 w-full rounded-lg border border-gray-300 focus:ring-[#004b6e] focus:border-[#004b6e]"
-                  value={eventData.time}
-                  onChange={(e) => setEventData({ ...eventData, time: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-              Location
-            </label>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                id="location"
-                className="pl-10 w-full rounded-lg border border-gray-300 focus:ring-[#004b6e] focus:border-[#004b6e]"
-                placeholder="Enter location"
-                value={eventData.location}
-                onChange={(e) => setEventData({ ...eventData, location: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="circle" className="block text-sm font-medium text-gray-700 mb-1">
-              Select Circle
-            </label>
-            <div className="relative">
-              <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <select
-                id="circle"
-                className="pl-10 w-full rounded-lg border border-gray-300 focus:ring-[#004b6e] focus:border-[#004b6e]"
-                value={eventData.circle}
-                onChange={(e) => setEventData({ ...eventData, circle: e.target.value })}
-              >
-                <option value="">Select a circle</option>
-                <option value="1">Sarah's School Group</option>
-                <option value="2">Soccer Team Parents</option>
-              </select>
-            </div>
-          </div>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#fef9f4]">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center">
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">Create a New Event</h2>
+          <p className="mt-2 text-sm text-gray-600">Add an event to your trusted Circle calendar.</p>
         </div>
 
-        <button
-          type="submit"
-          className="w-full bg-[#004b6e] text-white py-3 rounded-lg hover:bg-[#003b56] transition-colors"
-        >
-          Create Event
-        </button>
-      </form>
+        <form className="mt-8 space-y-6" onSubmit={handleCreateEvent}>
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="Event Title"
+              className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] focus:z-10 sm:text-sm"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
+            <input
+              type="date"
+              className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] focus:z-10 sm:text-sm"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+            <input
+              type="time"
+              className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] focus:z-10 sm:text-sm"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              required
+            />
+            <textarea
+              placeholder="Notes (optional)"
+              className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] focus:z-10 sm:text-sm"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
+          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+
+          <div>
+            <button
+              type="submit"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#004b6e] hover:bg-[#003b56] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#004b6e]"
+            >
+              Create Event
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

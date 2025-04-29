@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleUserRound } from 'lucide-react';
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase"; // <-- ADD db import
+import { doc, setDoc } from "firebase/firestore"; // <-- ADD Firestore functions
 
 const Signup: React.FC = () => {
   const [email, setEmail] = useState<string>('');
@@ -15,6 +16,20 @@ const Signup: React.FC = () => {
     e.preventDefault();
     try {
       await createUserWithEmailAndPassword(auth, email, password);
+
+      // Get the current user
+      const user = auth.currentUser;
+
+      if (user) {
+        // Save user info to Firestore
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          email: user.email,
+          circleId: null, // No circle assigned yet
+          createdAt: new Date()
+        });
+      }
+
       alert("Signup successful!");
       navigate('/login');
     } catch (err: any) {
