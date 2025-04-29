@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleUserRound } from 'lucide-react';
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../firebase"; // <-- ADD db import
-import { doc, setDoc } from "firebase/firestore"; // <-- ADD Firestore functions
+import { auth, db } from "../firebase"; // Import Firebase Auth and Firestore
+import { doc, setDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore"; // Firestore functions
 
 const Signup: React.FC = () => {
   const [email, setEmail] = useState<string>('');
@@ -15,24 +15,52 @@ const Signup: React.FC = () => {
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-
-      // Get the current user
-      const user = auth.currentUser;
+      // 1. Create user with Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
       if (user) {
-        // Save user info to Firestore
-        await setDoc(doc(db, "users", user.uid), {
-          uid: user.uid,
-          email: user.email,
-          circleId: null, // No circle assigned yet
-          createdAt: new Date()
-        });
+        // 2. After signup, check if this email was invited to a Circle
+        const invitesRef = collection(db, "invites");
+        const q = query(
+          invitesRef,
+          where("email", "==", email.toLowerCase()), 
+          where("status", "==", "pending")
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          // 3a. If invite found, link the user to the invited Circle
+          const inviteDoc = querySnapshot.docs[0];
+          const inviteData = inviteDoc.data();
+
+          // Save user info including Circle ID
+          await setDoc(doc(db, "users", user.uid), {
+            uid: user.uid,
+            email: user.email,
+            circleId: inviteData.circleId,
+            createdAt: new Date(),
+          });
+
+          // Mark invite as accepted
+          await updateDoc(doc(db, "invites", inviteDoc.id), {
+            status: "accepted",
+          });
+        } else {
+          // 3b. No invite found, create user without Circle
+          await setDoc(doc(db, "users", user.uid), {
+            uid: user.uid,
+            email: user.email,
+            circleId: null, // No Circle assigned
+            createdAt: new Date(),
+          });
+        }
       }
 
       alert("Signup successful!");
       navigate('/login');
     } catch (err: any) {
+      console.error(err.message);
       setError(err.message);
     }
   };
