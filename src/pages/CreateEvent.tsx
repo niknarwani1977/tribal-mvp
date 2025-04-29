@@ -41,7 +41,15 @@ const CreateEvent: React.FC = () => {
           createdAt: Timestamp.now()
         });
 
-        alert("Event created successfully!");
+        // Save a new Notification inside the "notifications" collection
+        await addDoc(collection(db, "notifications"), {
+          circleId: circleId,
+          message: `New event created: ${title}`,
+          createdAt: Timestamp.now(),
+          readBy: [], // No users have read it yet
+        });
+
+        alert("Event and Notification created successfully!");
         navigate('/calendar'); // Redirect after creation
       } else {
         throw new Error('User document not found');
