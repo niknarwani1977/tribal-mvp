@@ -47,6 +47,22 @@ const Notifications: React.FC = () => {
           fetchedNotifications.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
 
           setNotifications(fetchedNotifications);
+          // After setting notifications:
+            if (user && fetchedNotifications.length > 0) {
+              const batch = fetchedNotifications.map(async (notif) => {
+                const notifRef = doc(db, "notifications", notif.id);
+                const notifSnap = await getDoc(notifRef);
+                const notifData = notifSnap.data();
+
+    if (notifData && (!notifData.readBy || !notifData.readBy.includes(user.uid))) {
+      await notifRef.update({
+        readBy: [...(notifData.readBy || []), user.uid],
+      });
+    }
+  });
+
+  await Promise.all(batch);
+}
         }
       } catch (error: any) {
         console.error(error.message);
