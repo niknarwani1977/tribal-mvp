@@ -14,7 +14,7 @@ const Notifications: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-  const fetchNotifications = async () => {
+  const fetchAndMarkNotifications = async () => {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('User not logged in');
@@ -23,44 +23,42 @@ const Notifications: React.FC = () => {
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
-        const circleId = userData.circleId;
+      if (!userDocSnap.exists()) {
+        throw new Error('User document not found');
+      }
 
-        if (!circleId) {
-          throw new Error('User is not part of a Circle');
-        }
+      const userData = userDocSnap.data();
+      const circleId = userData.circleId;
+      if (!circleId) {
+        throw new Error('User is not part of a Circle');
+      }
 
-        // Fetch Notifications for the user's Circle
-        const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
-        const querySnapshot = await getDocs(q);
+      // Query all notifications for this Circle
+      const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
+      const querySnapshot = await getDocs(q);
 
-        const fetchedNotifications: Notification[] = [];
-        const markAsReadBatch = []; // <-- New batch to update read status
+      const fetchedNotifications: Notification[] = [];
 
-        querySnapshot.forEach((docSnap) => {
-          const notifData = docSnap.data();
-          fetchedNotifications.push({
-            id: docSnap.id,
-            ...notifData,
-          } as Notification);
+      // Prepare to update unread notifications
+      for (const docSnap of querySnapshot.docs) {
+        const notifData = docSnap.data();
 
-          // If the notification has NOT been read by current user
-          if (!notifData.readBy || !notifData.readBy.includes(user.uid)) {
-            // Queue up an update to add current user ID
-            markAsReadBatch.push(doc(db, "notifications", docSnap.id));
-          }
-        });
+        fetchedNotifications.push({
+          id: docSnap.id,
+          ...notifData,
+        } as Notification);
 
-        setNotifications(fetchedNotifications);
-
-        // Batch update notifications to mark them as read
-        for (const notifRef of markAsReadBatch) {
+        // If user hasn't read this notification yet, update Firestore
+        if (!notifData.readBy || !notifData.readBy.includes(user.uid)) {
+          const notifRef = doc(db, "notifications", docSnap.id);
           await updateDoc(notifRef, {
-            readBy: [...(fetchedNotifications.find(n => n.id === notifRef.id)?.readBy || []), user.uid],
+            readBy: [...(notifData.readBy || []), user.uid],
           });
         }
       }
+
+      // Update state with notifications
+      setNotifications(fetchedNotifications);
     } catch (error: any) {
       console.error(error.message);
     } finally {
@@ -68,8 +66,9 @@ const Notifications: React.FC = () => {
     }
   };
 
-  fetchNotifications();
+  fetchAndMarkNotifications();
 }, []);
+
 
 
   return (
