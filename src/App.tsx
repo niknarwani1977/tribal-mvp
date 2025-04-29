@@ -10,6 +10,7 @@ import CreateEvent from './pages/CreateEvent';
 import Notifications from './pages/Notifications';
 import Login from './pages/Login';
 import Signup from './pages/Signup'; // at top
+import CreateCircle from './pages/CreateCircle';
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/circles', icon: Users, label: 'Trusted Circles' },
@@ -31,6 +32,7 @@ function App() {
             <Route path="/calendar" element={<CalendarView />} />
             <Route path="/create-event" element={<CreateEvent />} />
             <Route path="/notifications" element={<Notifications />} />
+	    <Route path="/create-circle" element={<CreateCircle />} />
           </Routes>
         </div>
         <Navbar items={navItems} />
