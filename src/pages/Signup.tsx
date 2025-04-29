@@ -12,58 +12,51 @@ const Signup: React.FC = () => {
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
 
-  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      // 1. Create user with Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+ const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  try {
+    // 1. Create user with Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-      if (user) {
-        // 2. After signup, check if this email was invited to a Circle
-        const invitesRef = collection(db, "invites");
-        const q = query(
-          invitesRef,
-          where("email", "==", email.toLowerCase()), 
-          where("status", "==", "pending")
-        );
-        const querySnapshot = await getDocs(q);
+    // 2. After signup, check Firestore "invites" collection
+    const invitesRef = collection(db, "invites");
+    const q = query(
+      invitesRef,
+      where("email", "==", email.toLowerCase()), 
+      where("status", "==", "pending")
+    );
+    const querySnapshot = await getDocs(q);
 
-        if (!querySnapshot.empty) {
-          // 3a. If invite found, link the user to the invited Circle
-          const inviteDoc = querySnapshot.docs[0];
-          const inviteData = inviteDoc.data();
+    if (!querySnapshot.empty) {
+      // 3a. If invite found → link new user to the invited Circle
+      const inviteDoc = querySnapshot.docs[0];
+      const inviteData = inviteDoc.data();
 
-          // Save user info including Circle ID
-          await setDoc(doc(db, "users", user.uid), {
-            uid: user.uid,
-            email: user.email,
-            circleId: inviteData.circleId,
-            createdAt: new Date(),
-          });
+      // Save user's data in Firestore under "users" collection
+      await setDoc(doc(db, "users", user.uid), {
+        circleId: inviteData.circleId,
+        email: email.toLowerCase(),
+      });
 
-          // Mark invite as accepted
-          await updateDoc(doc(db, "invites", inviteDoc.id), {
-            status: "accepted",
-          });
-        } else {
-          // 3b. No invite found, create user without Circle
-          await setDoc(doc(db, "users", user.uid), {
-            uid: user.uid,
-            email: user.email,
-            circleId: null, // No Circle assigned
-            createdAt: new Date(),
-          });
-        }
-      }
-
-      alert("Signup successful!");
-      navigate('/login');
-    } catch (err: any) {
-      console.error(err.message);
-      setError(err.message);
+      // Update the invite status to "accepted"
+      await updateDoc(doc(db, "invites", inviteDoc.id), {
+        status: "accepted",
+      });
+    } else {
+      // 3b. No invite found → just create user entry without Circle
+      await setDoc(doc(db, "users", user.uid), {
+        email: email.toLowerCase(),
+      });
     }
-  };
+
+    alert("Signup successful!");
+    navigate('/login');
+  } catch (err: any) {
+    console.error(err.message);
+    setError(err.message);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#fef9f4]">
