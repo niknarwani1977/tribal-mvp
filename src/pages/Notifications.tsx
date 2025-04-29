@@ -1,4 +1,92 @@
-import React from 'react';
+// src/pages/Notifications.tsx
+import React, { useEffect, useState } from 'react';
+import { db, auth } from "../firebase";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+
+interface Notification {
+  id: string;
+  message: string;
+  createdAt: any;
+}
+
+const Notifications: React.FC = () => {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) throw new Error('User not logged in');
+
+        // Fetch user's Circle ID
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          const circleId = userData.circleId;
+
+          if (!circleId) {
+            throw new Error('User is not part of a Circle');
+          }
+
+          // Fetch Notifications for the user's Circle
+          const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
+          const querySnapshot = await getDocs(q);
+
+          const fetchedNotifications: Notification[] = [];
+          querySnapshot.forEach((doc) => {
+            fetchedNotifications.push({
+              id: doc.id,
+              ...doc.data(),
+            } as Notification);
+          });
+
+          // Sort notifications by newest first
+          fetchedNotifications.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+
+          setNotifications(fetchedNotifications);
+        }
+      } catch (error: any) {
+        console.error(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center px-4 bg-[#fef9f4]">
+      <div className="w-full max-w-md py-8 space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900 text-center">Notifications</h1>
+
+        {loading ? (
+          <p className="text-gray-600 text-center">Loading...</p>
+        ) : notifications.length === 0 ? (
+          <p className="text-gray-600 text-center">No notifications yet.</p>
+        ) : (
+          <ul className="space-y-4">
+            {notifications.map((notif) => (
+              <li key={notif.id} className="p-4 rounded-lg bg-white shadow-md text-gray-700">
+                {notif.message}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Notifications;
+
+
+
+
+/*import React from 'react';
 import { Bell } from 'lucide-react';
 import type { Notification } from '../types';
 
@@ -73,4 +161,4 @@ const Notifications = () => {
   );
 };
 
-export default Notifications;
+export default Notifications;*/
