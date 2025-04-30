@@ -25,8 +25,8 @@ const Login: React.FC = () => {
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           if (userData.circleId) {
-            // User already belongs to a Circle
-            navigate("/calendar");
+          // User already belongs to a Circle
+            navigate("/");
           } else {
             // No Circle yet, redirect to Create Circle page
             navigate("/create-circle");
