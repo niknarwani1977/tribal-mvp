@@ -1,9 +1,17 @@
-// src/pages/CalendarView.tsx
 import React, { useEffect, useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  deleteDoc
+} from 'firebase/firestore';
 
 interface Event {
   id: string;
@@ -18,7 +26,9 @@ const CalendarView: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
+  // Fetch all events in user's circle on component mount
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -50,11 +60,25 @@ const CalendarView: React.FC = () => {
     fetchEvents();
   }, []);
 
+  // Filter events by selected date
   useEffect(() => {
     const dayStr = selectedDate.toISOString().split('T')[0]; // 'YYYY-MM-DD'
     const dayEvents = events.filter(ev => ev.date === dayStr);
     setFilteredEvents(dayEvents);
   }, [selectedDate, events]);
+
+  // Handle deleting an event
+  const handleDelete = async (eventId: string) => {
+    if (confirm("Are you sure you want to delete this event?")) {
+      try {
+        await deleteDoc(doc(db, "events", eventId));
+        alert("Event deleted!");
+        window.location.reload(); // simple refresh
+      } catch (err: any) {
+        console.error("Delete error:", err.message);
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen px-4 py-8 bg-[#fef9f4]">
@@ -62,49 +86,58 @@ const CalendarView: React.FC = () => {
 
       <div className="flex flex-col md:flex-row justify-center gap-6">
         <div>
-        <Calendar
-  // Handle the date user clicks on
-  onChange={setSelectedDate}
-  // Highlight the currently selected date
-  value={selectedDate}
-  
-  // Customize each tile (day box) inside the calendar
-  tileContent={({ date, view }) => {
-    // Only modify the month view (not year/decade views)
-    if (view === 'month') {
-      // Convert date to YYYY-MM-DD string format
-      const dayStr = date.toISOString().split('T')[0];
-      
-      // Check if any event matches this date
-      const hasEvent = events.some(event => event.date === dayStr);
-
-      // If there is an event on this day, show a small blue dot 🔵
-      return hasEvent ? (
-        <div className="flex justify-center mt-1">
-          <span className="w-2 h-2 bg-[#004b6e] rounded-full"></span>
-        </div>
-      ) : null; // Otherwise, don't render anything
-    }
-    
-    return null;
-  }}
-/>
-
+          <Calendar
+            onChange={setSelectedDate}
+            value={selectedDate}
+            tileContent={({ date, view }) => {
+              if (view === 'month') {
+                const dayStr = date.toISOString().split('T')[0];
+                const hasEvent = events.some(event => event.date === dayStr);
+                return hasEvent ? (
+                  <div className="flex justify-center mt-1">
+                    <span className="w-2 h-2 bg-[#004b6e] rounded-full"></span>
+                  </div>
+                ) : null;
+              }
+              return null;
+            }}
+          />
         </div>
 
         <div className="flex-1">
           <h2 className="text-xl font-semibold mb-2 text-[#004b6e]">
             Events on {selectedDate.toDateString()}:
           </h2>
+
           {filteredEvents.length === 0 ? (
             <p className="text-gray-600">No events on this day.</p>
           ) : (
             <ul className="space-y-4">
               {filteredEvents.map(event => (
-                <li key={event.id} className="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <li
+                  key={event.id}
+                  className="bg-white p-4 rounded-lg shadow border border-gray-200"
+                >
                   <h3 className="text-lg font-semibold">{event.title}</h3>
                   <p className="text-sm text-gray-600">{event.time}</p>
-                  {event.notes && <p className="text-sm text-gray-500 mt-1">{event.notes}</p>}
+                  {event.notes && (
+                    <p className="text-sm text-gray-500 mt-1">{event.notes}</p>
+                  )}
+
+                  <div className="flex justify-end gap-4 mt-2">
+                    <button
+                      className="text-blue-600 text-sm"
+                      onClick={() => navigate(`/edit-event/${event.id}`)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="text-red-600 text-sm"
+                      onClick={() => handleDelete(event.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
