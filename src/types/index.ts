@@ -29,3 +29,10 @@ export interface Notification {
   read: boolean;
   createdAt: string;
 }
+export interface FamilyMember {
+  id: string;
+  name: string;
+  age?: number;
+  photoUrl?: string;
+  relationship?: string;
+}
