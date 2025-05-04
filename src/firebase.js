@@ -1,10 +1,11 @@
 // src/firebase.js
-// Import the functions you need from the SDKs you need
+
+// Import necessary Firebase SDKs
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
+// Your Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBPddSf_e7XVn8k1gp3oZLHElS1wbzYSaE",
   authDomain: "tribalapp-22f5a.firebaseapp.com",
@@ -13,7 +14,6 @@ const firebaseConfig = {
   messagingSenderId: "602057086930",
   appId: "1:602057086930:web:64bd71e470c7124869da0b"
 };
-
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -22,23 +22,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Export them to use in other files
-export { auth, db };
+// Initialize Google Auth Provider
+const googleProvider = new GoogleAuthProvider();
 
-/*import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBPddSf_e7XVn8k1gp3oZLHElS1wbzYSaE",
-  authDomain: "tribalapp-22f5a.firebaseapp.com",
-  projectId: "tribalapp-22f5a",
-  storageBucket: "tribalapp-22f5a.firebasestorage.app",
-  messagingSenderId: "602057086930",
-  appId: "1:602057086930:web:64bd71e470c7124869da0b"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Initialize Authentication
-export const auth = getAuth(app);*/
+// Export everything
+export { auth, db, googleProvider };
