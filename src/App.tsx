@@ -49,6 +49,7 @@ function App() {
             <Route path="/create-circle" element={<CreateCircle />} />
             <Route path="/invite" element={<Invite />} />
             <Route path="/manage-family" element={<ManageFamily />} />
+            <Route path="/add-family-member" element={<AddFamilyMember />} />
           </Routes>
         </div>
         <Navbar items={navItems} />
