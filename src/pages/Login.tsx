@@ -1,7 +1,7 @@
 // src/pages/Login.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "../firebase";
 import { CircleUserRound } from 'lucide-react';
 
