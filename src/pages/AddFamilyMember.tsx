@@ -1,48 +1,52 @@
-// src/pages/AddFamilyMember.tsx
-
 import React, { useState } from 'react';
-import { db, auth } from '../firebase';
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
-import ImageUpload from '../components/ImageUpload'; // Image uploader component
+import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid'; // to generate unique IDs
+import { db } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth } from '../firebase';
+import { CircleUserRound } from 'lucide-react';
 
 const AddFamilyMember: React.FC = () => {
-  // State for family member form fields
+  // Define form state for name, relationship, and image
   const [name, setName] = useState('');
-  const [age, setAge] = useState('');
-  const [role, setRole] = useState('Child'); // Default role
-  const [photoURL, setPhotoURL] = useState<string | null>(null); // Stores uploaded image URL
+  const [relationship, setRelationship] = useState('');
+  const [photo, setPhoto] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const user = auth.currentUser;
+
+    // If user isn't authenticated, don't allow submission
+    if (!user) {
+      setError('You must be logged in to add a family member.');
+      return;
+    }
+
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not logged in");
+      const memberId = uuidv4(); // generate a unique ID for this family member
+      const familyRef = doc(db, 'users', user.uid, 'family', memberId);
 
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) throw new Error("User document not found");
-
-      const circleId = userDoc.data().circleId;
-      if (!circleId) throw new Error("User is not part of a circle");
-
-      // Add the new family member to Firestore under the current user's circle
-      await addDoc(collection(db, 'familyMembers'), {
+      await setDoc(familyRef, {
+        id: memberId,
         name,
-        age,
-        role,
-        photoURL: photoURL || '', // Add uploaded photo URL if available
-        circleId,
-        createdBy: user.uid,
-        createdAt: new Date()
+        relationship,
+        photoUrl: '', // we'll update this later with photo uploads
       });
 
-      alert("Family member added!");
-      setName('');
-      setAge('');
-      setRole('Child');
-      setPhotoURL(null);
+      alert('Family member added successfully!');
+      navigate('/manage-family'); // redirect after success
     } catch (err: any) {
-      setError(err.message);
+      setError('Error saving family member: ' + err.message);
+    }
+  };
+
+  // Handle photo file change
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setPhoto(e.target.files[0]);
     }
   };
 
@@ -50,54 +54,46 @@ const AddFamilyMember: React.FC = () => {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#fef9f4]">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Add Family Member</h2>
-          <p className="text-sm text-gray-600">Record details and upload a photo</p>
+          <CircleUserRound className="mx-auto h-16 w-16 text-[#004b6e]" />
+          <h2 className="mt-6 text-2xl font-bold text-gray-900">Add Family Member</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name input */}
+          {/* Name Input */}
           <input
             type="text"
-            placeholder="Full Name"
-            className="w-full px-3 py-2 border rounded"
+            placeholder="Name"
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           />
 
-          {/* Age input */}
+          {/* Relationship Input */}
           <input
-            type="number"
-            placeholder="Age"
-            className="w-full px-3 py-2 border rounded"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
-            required
+            type="text"
+            placeholder="Relationship"
+            value={relationship}
+            onChange={(e) => setRelationship(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           />
 
-          {/* Role dropdown */}
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="w-full px-3 py-2 border rounded"
-          >
-            <option value="Child">Child</option>
-            <option value="Parent">Parent</option>
-            <option value="Guardian">Guardian</option>
-          </select>
+          {/* Photo Upload Input */}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoChange}
+            className="w-full"
+          />
 
-          {/* Upload photo */}
-          <ImageUpload onUpload={(url) => setPhotoURL(url)} />
+          {error && <p className="text-red-500 text-sm">{error}</p>}
 
-          {/* Submit button */}
           <button
             type="submit"
-            className="w-full bg-[#004b6e] text-white py-2 rounded hover:bg-[#003b56]"
+            className="w-full bg-[#004b6e] hover:bg-[#003b56] text-white font-medium py-2 px-4 rounded-md"
           >
             Save Member
           </button>
-
-          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </form>
       </div>
     </div>
