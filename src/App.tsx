@@ -38,7 +38,6 @@ function App() {
             {/* Auth routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-
             {/* Main app routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/circles" element={<TrustedCircles />} />
