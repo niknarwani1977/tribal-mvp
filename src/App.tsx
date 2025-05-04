@@ -14,7 +14,7 @@ import CreateCircle from './pages/CreateCircle';
 import CreateEvent from "./pages/CreateEvent";
 import CalendarView from "./pages/CalendarView";
 import Invite from "./pages/Invite";
-
+import EditEvent from './pages/EditEvent';
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/circles', icon: Users, label: 'Trusted Circles' },
@@ -40,6 +40,7 @@ function App() {
 	    <Route path="/create-event" element={<CreateEvent />} />
 	    <Route path="/calendar" element={<CalendarView />} />
 	    <Route path="/invite" element={<Invite />} />
+	    <Route path="/edit-event/:id" element={<EditEvent />} />
           </Routes>
         </div>
         <Navbar items={navItems} />
