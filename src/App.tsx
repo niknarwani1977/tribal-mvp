@@ -15,12 +15,15 @@ import CreateEvent from "./pages/CreateEvent";
 import CalendarView from "./pages/CalendarView";
 import Invite from "./pages/Invite";
 import EditEvent from './pages/EditEvent';
+import ManageFamily from './pages/ManageFamily';
+
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/circles', icon: Users, label: 'Trusted Circles' },
   { path: '/calendar', icon: Calendar, label: 'Calendar' },
   { path: '/create-event', icon: PlusCircle, label: 'Create Event' },
   { path: '/notifications', icon: Bell, label: 'Notifications' },
+  { path: '/manage-family', icon: Users, label: 'Family' }, // ✅ New link
 ];
 
 function App() {
@@ -41,6 +44,7 @@ function App() {
 	    <Route path="/calendar" element={<CalendarView />} />
 	    <Route path="/invite" element={<Invite />} />
 	    <Route path="/edit-event/:id" element={<EditEvent />} />
+	    <Route path="/manage-family" element={<ManageFamily />} />
           </Routes>
         </div>
         <Navbar items={navItems} />
