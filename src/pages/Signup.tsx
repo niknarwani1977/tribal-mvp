@@ -3,10 +3,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleUserRound } from 'lucide-react';
 import {
+  getAuth,
   createUserWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider,
 } from 'firebase/auth';
+import { GoogleAuthProvider } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
