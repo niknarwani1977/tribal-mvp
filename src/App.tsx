@@ -10,8 +10,6 @@ import CreateEvent from './pages/CreateEvent';
 import Notifications from './pages/Notifications';
 import Login from './pages/Login';
 import Signup from './pages/Signup'; // at top
-import CreateCircle from './pages/CreateCircle';
-import CreateEvent from "./pages/CreateEvent";
 import CalendarView from "./pages/CalendarView";
 import Invite from "./pages/Invite";
 import EditEvent from './pages/EditEvent';
@@ -40,8 +38,6 @@ function App() {
             <Route path="/create-event" element={<CreateEvent />} />
             <Route path="/notifications" element={<Notifications />} />
 	    <Route path="/create-circle" element={<CreateCircle />} />
-	    <Route path="/create-event" element={<CreateEvent />} />
-	    <Route path="/calendar" element={<CalendarView />} />
 	    <Route path="/invite" element={<Invite />} />
 	    <Route path="/edit-event/:id" element={<EditEvent />} />
 	    <Route path="/manage-family" element={<ManageFamily />} />
