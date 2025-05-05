@@ -3,28 +3,28 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleUserRound } from 'lucide-react';
 import {
-  getAuth,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  GoogleAuthProvider,
 } from 'firebase/auth';
-import { GoogleAuthProvider } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const Signup: React.FC = () => {
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [error, setError] = useState<string>('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const navigate = useNavigate();
 
-  // Email/password signup handler
+  // Handle email/password signup
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCred.user;
 
-      // Create user record in Firestore
+      // Create user in Firestore
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         email: user.email,
@@ -39,18 +39,18 @@ const Signup: React.FC = () => {
     }
   };
 
-  // Google signup handler
+  // Handle Google signup
   const handleGoogleSignup = async () => {
+    setLoadingGoogle(true);
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user already exists in Firestore
       const userRef = doc(db, 'users', user.uid);
       const existing = await getDoc(userRef);
 
-      // If not found, create a new user document
+      // Only add to Firestore if not already existing
       if (!existing.exists()) {
         await setDoc(userRef, {
           uid: user.uid,
@@ -63,7 +63,9 @@ const Signup: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       console.error('Google signup error:', err.message);
-      setError(err.message);
+      setError('Google signup failed.');
+    } finally {
+      setLoadingGoogle(false);
     }
   };
 
@@ -78,32 +80,26 @@ const Signup: React.FC = () => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSignup}>
           <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="sr-only">Email address</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-lg w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-lg w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
-              />
-            </div>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="appearance-none rounded-lg w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
+            />
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="appearance-none rounded-lg w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
+            />
           </div>
 
           {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
@@ -116,19 +112,41 @@ const Signup: React.FC = () => {
           </button>
         </form>
 
-        <div className="text-center text-sm text-gray-500">or</div>
+        <div className="relative mt-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-[#fef9f4] text-gray-500">or</span>
+          </div>
+        </div>
 
         <button
           onClick={handleGoogleSignup}
-          className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md bg-white text-sm font-medium hover:bg-gray-50"
+          disabled={loadingGoogle}
+          className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md bg-white text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
         >
-          <img
-            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-            alt="Google"
-            className="h-5 w-5 mr-2"
-          />
-          Continue with Google
+          {loadingGoogle ? (
+            <svg className="animate-spin h-5 w-5 text-gray-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt="Google"
+              className="h-5 w-5 mr-2"
+            />
+          )}
+          {loadingGoogle ? 'Signing up...' : 'Continue with Google'}
         </button>
+
+        <div className="text-center text-sm text-gray-600 mt-4">
+          Already have an account?{' '}
+          <a href="/login" className="text-[#004b6e] font-medium hover:underline">
+            Sign in here
+          </a>
+        </div>
       </div>
     </div>
   );
