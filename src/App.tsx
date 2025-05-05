@@ -1,35 +1,28 @@
 // src/App.tsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Users, Calendar, Bell, PlusCircle, Home } from 'lucide-react';
-
-// Components
-import Navbar from './components/Navbar';
-
-// Pages
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 import HomePage from './pages/HomePage';
 import TrustedCircles from './pages/TrustedCircles';
 import CalendarView from './pages/CalendarView';
 import CreateEvent from './pages/CreateEvent';
+import EditEvent from './pages/EditEvent';
 import Notifications from './pages/Notifications';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
 import CreateCircle from './pages/CreateCircle';
 import Invite from './pages/Invite';
-import EditEvent from './pages/EditEvent';
 import ManageFamily from './pages/ManageFamily';
+import Navbar from './components/Navbar';
 
 // Define navigation items for the bottom navbar
 const navItems = [
-  { path: '/', icon: Home, label: 'Home' },
-  { path: '/circles', icon: Users, label: 'Trusted Circles' },
-  { path: '/calendar', icon: Calendar, label: 'Calendar' },
-  { path: '/create-event', icon: PlusCircle, label: 'Create Event' },
-  { path: '/notifications', icon: Bell, label: 'Notifications' },
-  { path: '/manage-family', icon: Users, label: 'Family' },
+  { label: 'Home', path: '/' },
+  { label: 'Calendar', path: '/calendar' },
+  { label: 'Circles', path: '/circles' },
+  { label: 'Notifications', path: '/notifications' },
 ];
 
-function App() {
+const App: React.FC = () => {
   return (
     <Router>
       <div className="min-h-screen bg-[#fef9f4]">
@@ -51,10 +44,11 @@ function App() {
             <Route path="/manage-family" element={<ManageFamily />} />
           </Routes>
         </div>
+        {/* Bottom navigation bar */}
         <Navbar items={navItems} />
       </div>
     </Router>
   );
-}
+};
 
 export default App;
