@@ -14,7 +14,7 @@ import Invite from './pages/Invite';
 import ManageFamily from './pages/ManageFamily';
 import Navbar from './components/Navbar';
 import AddFamilyMember from './pages/AddFamilyMember';
-
+ 
 
 // Define navigation items for the bottom navbar
 const navItems = [
