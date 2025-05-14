@@ -1,5 +1,5 @@
 // src/pages/CalendarView.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Dummy data for now – replace with actual events from Firestore later
@@ -10,31 +10,103 @@ const sampleEvents = [
 ];
 
 const CalendarView: React.FC = () => {
+  const [currentMonth, setCurrentMonth] = useState(new Date('2025-05-01'));
   const navigate = useNavigate();
 
-  const handleEdit = (id: string) => {
-    navigate(`/edit-event/${id}`);
-  };
+  // Group events by date for quick lookup
+  const eventsByDate: Record<string, typeof sampleEvents> = sampleEvents.reduce(
+    (acc, evt) => {
+      acc[evt.date] = [...(acc[evt.date] || []), evt];
+      return acc;
+    },
+    {} as Record<string, typeof sampleEvents>
+  );
+
+  // Calculate month grid
+  const firstDayIndex = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth(),
+    1
+  ).getDay();
+  const daysInMonth = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth() + 1,
+    0
+  ).getDate();
+  const totalCells = firstDayIndex + daysInMonth;
+  const rows = Math.ceil(totalCells / 7);
+  const calendarDates = Array.from({ length: rows * 7 }).map((_, i) => {
+    const dayNum = i - firstDayIndex + 1;
+    return dayNum > 0 && dayNum <= daysInMonth
+      ? new Date(
+          currentMonth.getFullYear(),
+          currentMonth.getMonth(),
+          dayNum
+        )
+      : null;
+  });
+
+  // Navigation handlers
+  const prevMonth = () =>
+    setCurrentMonth(
+      new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() - 1,
+        1
+      )
+    );
+  const nextMonth = () =>
+    setCurrentMonth(
+      new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+        1
+      )
+    );
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4 text-[#004b6e]">Upcoming Events</h2>
-      <div className="space-y-3">
-        {sampleEvents.map((event) => (
+      {/* Month header */}
+      <div className="flex justify-between items-center mb-4">
+        <button onClick={prevMonth} className="px-2">‹</button>
+        <h2 className="text-xl font-semibold">
+          {currentMonth.toLocaleString('default', {
+            month: 'long',
+            year: 'numeric',
+          })}
+        </h2>
+        <button onClick={nextMonth} className="px-2">›</button>
+      </div>
+
+      {/* Day names */}
+      <div className="grid grid-cols-7 gap-2 text-center font-medium">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          <div key={day}>{day}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-2 mt-2">
+        {calendarDates.map((date, idx) => (
           <div
-            key={event.id}
-            className="p-4 border rounded-lg bg-white shadow-sm flex justify-between items-center"
+            key={idx}
+            className="h-24 border rounded-lg p-1 bg-white relative overflow-auto"
           >
-            <div>
-              <p className="text-gray-800 font-medium">{event.title}</p>
-              <p className="text-gray-500 text-sm">{event.date}</p>
-            </div>
-            <button
-              onClick={() => handleEdit(event.id)}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              Edit
-            </button>
+            {date && (
+              <>
+                <div className="text-sm font-medium">{date.getDate()}</div>
+                {/* Render events for this date */}
+                {eventsByDate[date.toISOString().slice(0, 10)]?.map((evt) => (
+                  <div
+                    key={evt.id}
+                    onClick={() => navigate(`/edit-event/${evt.id}`)}
+                    className="mt-1 text-xs text-blue-600 cursor-pointer hover:underline"
+                  >
+                    {evt.title}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         ))}
       </div>
