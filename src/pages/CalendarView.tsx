@@ -1,25 +1,33 @@
 // src/pages/CalendarView.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-// Dummy data for now – replace with actual events from Firestore later
-const sampleEvents = [
-  { id: '1', title: 'Soccer Practice', date: '2025-05-06' },
-  { id: '2', title: 'Parent-Teacher Meeting', date: '2025-05-07' },
-  { id: '3', title: 'Birthday Party', date: '2025-05-08' },
-];
+import { auth, db } from '../firebase';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 
 const CalendarView: React.FC = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date('2025-05-01'));
   const navigate = useNavigate();
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [events, setEvents] = useState<{ id: string; title: string; date: string }[]>([]);
+
+  // Subscribe to Firestore events
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const eventsQuery = query(collection(db, 'users', user.uid, 'events'));
+    const unsubscribe = onSnapshot(eventsQuery, snapshot => {
+      const evts = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      setEvents(evts);
+    });
+    return unsubscribe;
+  }, []);
 
   // Group events by date
-  const eventsByDate: Record<string, typeof sampleEvents> = sampleEvents.reduce((acc, evt) => {
+  const eventsByDate = events.reduce((acc, evt) => {
     acc[evt.date] = [...(acc[evt.date] || []), evt];
     return acc;
-  }, {} as Record<string, typeof sampleEvents>);
+  }, {} as Record<string, typeof events>);
 
-  // Calculate month grid
+  // Build calendar grid
   const firstDayIndex = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth(),
@@ -32,60 +40,52 @@ const CalendarView: React.FC = () => {
   ).getDate();
   const totalCells = firstDayIndex + daysInMonth;
   const rows = Math.ceil(totalCells / 7);
-  const calendarDates = Array.from({ length: rows * 7 }).map((_, i) => {
-    const dayNum = i - firstDayIndex + 1;
-    return dayNum > 0 && dayNum <= daysInMonth
-      ? new Date(
-          currentMonth.getFullYear(),
-          currentMonth.getMonth(),
-          dayNum
-        )
+  const calendarDates = Array.from({ length: rows * 7 }).map((_, idx) => {
+    const day = idx - firstDayIndex + 1;
+    return day > 0 && day <= daysInMonth
+      ? new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
       : null;
   });
 
-  // Navigation handlers
-  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  const prevMonth = () =>
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
+    );
+  const nextMonth = () =>
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
+    );
 
   return (
     <div className="p-4">
-      {/* Month header */}
       <div className="flex justify-between items-center mb-4">
-        <button onClick={prevMonth} className="px-2">‹</button>
+        <button onClick={prevMonth}>‹</button>
         <h2 className="text-xl font-semibold">
           {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
         </h2>
-        <button onClick={nextMonth} className="px-2">›</button>
+        <button onClick={nextMonth}>›</button>
       </div>
-
-      {/* Day names */}
-      <div className="grid grid-cols-7 gap-2 text-center font-medium text-sm">
-        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => (
-          <div key={day}>{day}</div>
+      <div className="grid grid-cols-7 text-center font-medium text-sm">
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+          <div key={d}>{d}</div>
         ))}
       </div>
-
-      {/* Calendar grid with interactivity */}
       <div className="grid grid-cols-7 gap-2 mt-2">
-        {calendarDates.map((date, idx) => {
-          const key = date ? date.toISOString().slice(0,10) : `empty-${idx}`;
+        {calendarDates.map((date, i) => {
+          const key = date ? date.toISOString().slice(0, 10) : `empty-${i}`;
           const dayEvents = date ? eventsByDate[key] || [] : [];
-
           return (
             <div
-              key={idx}
+              key={i}
               onClick={() => date && navigate(`/create-event?date=${key}`)}
-              className="h-24 border rounded-lg p-1 bg-white relative overflow-auto cursor-pointer hover:bg-gray-100"
+              className="h-24 border rounded-lg p-1 bg-white cursor-pointer hover:bg-gray-100"
             >
               {date && (
                 <>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between">
                     <span className="text-sm font-medium">{date.getDate()}</span>
-                    {dayEvents.length > 0 && (
-                      <span className="inline-block w-2 h-2 bg-blue-600 rounded-full"></span>
-                    )}
+                    {dayEvents.length > 0 && <span className="w-2 h-2 bg-blue-600 rounded-full"></span>}
                   </div>
-                  {/* Event titles clickable */}
                   {dayEvents.map(evt => (
                     <div
                       key={evt.id}
