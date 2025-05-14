@@ -1,39 +1,40 @@
 // src/pages/Login.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth, db } from "../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+} from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { CircleUserRound } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const [loadingGoogle, setLoadingGoogle] = useState<boolean>(false); // loading state for Google login
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const navigate = useNavigate();
 
-  // Handles email/password login
+  // Email/password login
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, email, password);
-
       const user = auth.currentUser;
       if (user) {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
           if (userData.circleId) {
-            navigate("/calendar"); // If part of a circle → go to calendar
+            navigate('/calendar');
           } else {
-            navigate("/create-circle"); // If no circle yet → prompt to create
+            navigate('/create-circle');
           }
         } else {
-          console.error("User document not found");
-          navigate("/create-circle");
+          navigate('/create-circle');
         }
       }
     } catch (err: any) {
@@ -41,7 +42,7 @@ const Login: React.FC = () => {
     }
   };
 
-  // Handles Google login via popup
+  // Google login
   const handleGoogleLogin = async () => {
     setLoadingGoogle(true);
     try {
@@ -49,23 +50,22 @@ const Login: React.FC = () => {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      const userRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userRef);
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
 
-      // If first-time user → save to Firestore
-      if (!userDoc.exists()) {
+      if (!userSnap.exists()) {
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
           circleId: null,
-          createdAt: new Date()
+          createdAt: new Date(),
         });
       }
 
-      navigate('/'); // Redirect to home/dashboard
+      navigate('/');
     } catch (err: any) {
-      console.error("Google login error:", err.message);
-      alert("Google login failed.");
+      console.error('Google login error:', err.message);
+      setError('Google login failed.');
     } finally {
       setLoadingGoogle(false);
     }
@@ -88,7 +88,7 @@ const Login: React.FC = () => {
               type="email"
               required
               placeholder="Email address"
-              className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
+              className="appearance-none rounded-lg block w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -98,7 +98,7 @@ const Login: React.FC = () => {
               type="password"
               required
               placeholder="Password"
-              className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
+              className="appearance-none rounded-lg block w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -106,14 +106,12 @@ const Login: React.FC = () => {
 
           {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
 
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#004b6e] hover:bg-[#003b56] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#004b6e]"
-            >
-              Sign In
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#004b6e] hover:bg-[#003b56]"
+          >
+            Sign In
+          </button>
         </form>
 
         <div className="relative mt-6">
@@ -125,12 +123,11 @@ const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* Google Login Button */}
         <button
           type="button"
           onClick={handleGoogleLogin}
           disabled={loadingGoogle}
-          className="w-full mt-2 flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50"
+          className="w-full mt-2 flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 transition disabled:opacity-50"
         >
           {loadingGoogle ? (
             <svg className="animate-spin h-5 w-5 text-gray-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -144,15 +141,12 @@ const Login: React.FC = () => {
               className="h-5 w-5 mr-2"
             />
           )}
-          {loadingGoogle ? "Signing in..." : "Continue with Google"}
+          {loadingGoogle ? 'Signing in...' : 'Continue with Google'}
         </button>
-        {/* Signup link */}
+
         <div className="text-center text-sm text-gray-600 mt-4">
           Don’t have an account?{' '}
-          <a
-            href="/signup"
-            className="text-[#004b6e] font-medium hover:underline"
-          >
+          <a href="/signup" className="text-[#004b6e] font-medium hover:underline">
             Sign up here
           </a>
         </div>
