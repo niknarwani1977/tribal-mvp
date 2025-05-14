@@ -77,8 +77,11 @@ const CalendarView: React.FC = () => {
           return (
             <div
               key={i}
-              onClick={() => date && navigate(`/create-event?date=${key}`)}
-              className="h-24 border rounded-lg p-1 bg-white cursor-pointer hover:bg-gray-100" 
+              onClick={() => {
+                console.log('Calendar cell clicked:', key);
+                if (date) navigate(`/create-event?date=${key}`);
+              }}
+              className="h-24 border rounded-lg p-1 bg-white cursor-pointer hover:bg-gray-100"
             >
               {date && (
                 <>
