@@ -13,14 +13,11 @@ const CalendarView: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date('2025-05-01'));
   const navigate = useNavigate();
 
-  // Group events by date for quick lookup
-  const eventsByDate: Record<string, typeof sampleEvents> = sampleEvents.reduce(
-    (acc, evt) => {
-      acc[evt.date] = [...(acc[evt.date] || []), evt];
-      return acc;
-    },
-    {} as Record<string, typeof sampleEvents>
-  );
+  // Group events by date
+  const eventsByDate: Record<string, typeof sampleEvents> = sampleEvents.reduce((acc, evt) => {
+    acc[evt.date] = [...(acc[evt.date] || []), evt];
+    return acc;
+  }, {} as Record<string, typeof sampleEvents>);
 
   // Calculate month grid
   const firstDayIndex = new Date(
@@ -47,22 +44,8 @@ const CalendarView: React.FC = () => {
   });
 
   // Navigation handlers
-  const prevMonth = () =>
-    setCurrentMonth(
-      new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth() - 1,
-        1
-      )
-    );
-  const nextMonth = () =>
-    setCurrentMonth(
-      new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth() + 1,
-        1
-      )
-    );
+  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
 
   return (
     <div className="p-4">
@@ -70,45 +53,53 @@ const CalendarView: React.FC = () => {
       <div className="flex justify-between items-center mb-4">
         <button onClick={prevMonth} className="px-2">‹</button>
         <h2 className="text-xl font-semibold">
-          {currentMonth.toLocaleString('default', {
-            month: 'long',
-            year: 'numeric',
-          })}
+          {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
         </h2>
         <button onClick={nextMonth} className="px-2">›</button>
       </div>
 
       {/* Day names */}
-      <div className="grid grid-cols-7 gap-2 text-center font-medium">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+      <div className="grid grid-cols-7 gap-2 text-center font-medium text-sm">
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => (
           <div key={day}>{day}</div>
         ))}
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid with interactivity */}
       <div className="grid grid-cols-7 gap-2 mt-2">
-        {calendarDates.map((date, idx) => (
-          <div
-            key={idx}
-            className="h-24 border rounded-lg p-1 bg-white relative overflow-auto"
-          >
-            {date && (
-              <>
-                <div className="text-sm font-medium">{date.getDate()}</div>
-                {/* Render events for this date */}
-                {eventsByDate[date.toISOString().slice(0, 10)]?.map((evt) => (
-                  <div
-                    key={evt.id}
-                    onClick={() => navigate(`/edit-event/${evt.id}`)}
-                    className="mt-1 text-xs text-blue-600 cursor-pointer hover:underline"
-                  >
-                    {evt.title}
+        {calendarDates.map((date, idx) => {
+          const key = date ? date.toISOString().slice(0,10) : `empty-${idx}`;
+          const dayEvents = date ? eventsByDate[key] || [] : [];
+
+          return (
+            <div
+              key={idx}
+              onClick={() => date && navigate(`/create-event?date=${key}`)}
+              className="h-24 border rounded-lg p-1 bg-white relative overflow-auto cursor-pointer hover:bg-gray-100"
+            >
+              {date && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{date.getDate()}</span>
+                    {dayEvents.length > 0 && (
+                      <span className="inline-block w-2 h-2 bg-blue-600 rounded-full"></span>
+                    )}
                   </div>
-                ))}
-              </>
-            )}
-          </div>
-        ))}
+                  {/* Event titles clickable */}
+                  {dayEvents.map(evt => (
+                    <div
+                      key={evt.id}
+                      onClick={e => { e.stopPropagation(); navigate(`/edit-event/${evt.id}`); }}
+                      className="mt-1 text-xs text-blue-600 cursor-pointer hover:underline"
+                    >
+                      {evt.title}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
