@@ -1,119 +1,221 @@
 // src/pages/EditEvent.tsx
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { auth, db } from '../firebase';
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc
+} from 'firebase/firestore';
 
 const EditEvent: React.FC = () => {
-  const { id } = useParams(); // Get the event ID from URL
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [notes, setNotes] = useState('');
-  const [error, setError] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
+  const [interval, setInterval] = useState(1);
+  const [weeklyDays, setWeeklyDays] = useState<string[]>([]);
+  const [monthlyDay, setMonthlyDay] = useState(1);
 
-  // Load existing event details on mount
+  // Load event data
   useEffect(() => {
-    const fetchEvent = async () => {
+    const loadEvent = async () => {
+      const user = auth.currentUser;
+      if (!user || !id) return;
       try {
-        if (!id) throw new Error("No event ID provided");
-        const docRef = doc(db, "events", id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setTitle(data.title);
-          setDate(data.date);
-          setTime(data.time);
-          setNotes(data.notes || '');
-        } else {
-          throw new Error("Event not found");
+        const ref = doc(db, 'users', user.uid, 'events', id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+          setError('Event not found');
+          return;
+        }
+        const data = snap.data() as any;
+        setTitle(data.title);
+        setDate(data.date);
+        setStartTime(data.startTime || '');
+        setEndTime(data.endTime || '');
+        if (data.repeatRule) {
+          setRepeat(data.repeatRule.frequency || 'none');
+          setInterval(data.repeatRule.interval || 1);
+          if (data.repeatRule.days) setWeeklyDays(data.repeatRule.days);
+          if (data.repeatRule.dayOfMonth) setMonthlyDay(data.repeatRule.dayOfMonth);
         }
       } catch (err: any) {
-        console.error(err.message);
-        setError(err.message);
+        setError('Error loading event: ' + err.message);
+      } finally {
+        setLoading(false);
       }
     };
-
-    fetchEvent();
+    loadEvent();
   }, [id]);
 
-  // Handle event update
-  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+  const toggleWeeklyDay = (day: string) => {
+    setWeeklyDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const user = auth.currentUser;
+    if (!user || !id) {
+      setError('Not authorized or event missing');
+      return;
+    }
     try {
-      if (!id) throw new Error("No event ID provided");
-      const docRef = doc(db, "events", id);
-
-      await updateDoc(docRef, {
-        title,
-        date,
-        time,
-        notes
-      });
-
-      alert("Event updated!");
-      navigate("/calendar");
+      const ref = doc(db, 'users', user.uid, 'events', id);
+      const repeatRule: any = { frequency: repeat };
+      if (repeat !== 'none') repeatRule.interval = interval;
+      if (repeat === 'weekly') repeatRule.days = weeklyDays;
+      if (repeat === 'monthly') repeatRule.dayOfMonth = monthlyDay;
+      await updateDoc(ref, { title, date, startTime, endTime, repeatRule });
+      navigate('/calendar');
     } catch (err: any) {
-      console.error(err.message);
-      setError(err.message);
+      setError('Error updating event: ' + err.message);
     }
   };
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#fef9f4]">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center">
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">Edit Event</h2>
-          <p className="mt-2 text-sm text-gray-600">Make changes to your event details.</p>
-        </div>
+  const handleDelete = async () => {
+    const user = auth.currentUser;
+    if (!user || !id) return;
+    if (!window.confirm('Delete this event?')) return;
+    try {
+      const ref = doc(db, 'users', user.uid, 'events', id);
+      await deleteDoc(ref);
+      navigate('/calendar');
+    } catch (err: any) {
+      setError('Error deleting event: ' + err.message);
+    }
+  };
 
-        <form className="mt-8 space-y-6" onSubmit={handleUpdate}>
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Event Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="appearance-none rounded-lg block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
-              required
-            />
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="appearance-none rounded-lg block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
-              required
-            />
+  if (loading) return <div className="p-6">Loading...</div>;
+
+  return (
+    <div className="p-6 max-w-md mx-auto bg-white rounded-lg shadow mt-10">
+      <h2 className="text-xl font-semibold mb-4">Edit Event</h2>
+      {error && <div className="text-red-500 mb-2">{error}</div>}
+      <form onSubmit={handleUpdate} className="space-y-4">
+        <div>
+          <label className="block mb-1">Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            required
+            className="w-full border p-2 rounded"
+          />
+        </div>
+        <div>
+          <label className="block mb-1">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            required
+            className="w-full border p-2 rounded"
+          />
+        </div>
+        <div className="flex space-x-2">
+          <div className="flex-1">
+            <label className="block mb-1">Start Time</label>
             <input
               type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="appearance-none rounded-lg block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
-              required
-            />
-            <textarea
-              placeholder="Notes (optional)"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="appearance-none rounded-lg block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] sm:text-sm"
+              value={startTime}
+              onChange={e => setStartTime(e.target.value)}
+              className="w-full border p-2 rounded"
             />
           </div>
-
-          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-
-          <div>
-            <button
-              type="submit"
-              className="w-full bg-[#004b6e] text-white py-2 rounded-md hover:bg-[#003b56] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#004b6e]"
-            >
-              Save Changes
-            </button>
+          <div className="flex-1">
+            <label className="block mb-1">End Time</label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={e => setEndTime(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
           </div>
-        </form>
-      </div>
+        </div>
+        <div>
+          <label className="block mb-1">Repeat</label>
+          <select
+            value={repeat}
+            onChange={e => setRepeat(e.target.value as any)}
+            className="w-full border p-2 rounded"
+          >
+            <option value="none">None</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        {repeat !== 'none' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block mb-1">Every</label>
+              <input
+                type="number"
+                min={1}
+                value={interval}
+                onChange={e => setInterval(parseInt(e.target.value) || 1)}
+                className="w-full border p-2 rounded"
+              />
+            </div>
+            {repeat === 'weekly' && (
+              <div>
+                <label className="block mb-1">Repeat on:</label>
+                <div className="flex gap-2 flex-wrap">
+                  {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleWeeklyDay(day)}
+                      className={`px-2 py-1 border rounded ${
+                        weeklyDays.includes(day) ? 'bg-blue-600 text-white' : ''
+                      }`}>
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {repeat === 'monthly' && (
+              <div>
+                <label className="block mb-1">Day of month</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={monthlyDay}
+                  onChange={e => setMonthlyDay(parseInt(e.target.value) || 1)}
+                  className="w-full border p-2 rounded"
+                />
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex justify-between space-x-2">
+          <button
+            type="submit"
+            className="flex-1 py-2 bg-green-600 text-white rounded"
+          >
+            Update
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="flex-1 py-2 bg-red-600 text-white rounded"
+          >
+            Delete
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
