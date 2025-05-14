@@ -1,49 +1,46 @@
+// src/pages/AddFamilyMember.tsx
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { v4 as uuidv4 } from 'uuid'; // to generate unique IDs
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth } from '../firebase';
 import { CircleUserRound } from 'lucide-react';
 
 const AddFamilyMember: React.FC = () => {
-  // Define form state for name, relationship, and image
-  const [name, setName] = useState('');
-  const [relationship, setRelationship] = useState('');
+  const [name, setName] = useState<string>('');
+  const [relationship, setRelationship] = useState<string>('');
   const [photo, setPhoto] = useState<File | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string>('');
   const navigate = useNavigate();
 
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const user = auth.currentUser;
 
-    // If user isn't authenticated, don't allow submission
     if (!user) {
       setError('You must be logged in to add a family member.');
       return;
     }
 
     try {
-      const memberId = uuidv4(); // generate a unique ID for this family member
+      // Use built-in crypto API for UUID
+      const memberId = crypto.randomUUID();
       const familyRef = doc(db, 'users', user.uid, 'family', memberId);
 
       await setDoc(familyRef, {
         id: memberId,
         name,
         relationship,
-        photoUrl: '', // we'll update this later with photo uploads
+        photoUrl: '', // update this later when handling uploads
       });
 
       alert('Family member added successfully!');
-      navigate('/manage-family'); // redirect after success
+      navigate('/manage-family');
     } catch (err: any) {
       setError('Error saving family member: ' + err.message);
     }
   };
 
-  // Handle photo file change
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setPhoto(e.target.files[0]);
@@ -59,7 +56,6 @@ const AddFamilyMember: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name Input */}
           <input
             type="text"
             placeholder="Name"
@@ -69,7 +65,6 @@ const AddFamilyMember: React.FC = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           />
 
-          {/* Relationship Input */}
           <input
             type="text"
             placeholder="Relationship"
@@ -78,7 +73,6 @@ const AddFamilyMember: React.FC = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           />
 
-          {/* Photo Upload Input */}
           <input
             type="file"
             accept="image/*"
