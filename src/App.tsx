@@ -15,7 +15,7 @@ import ManageFamily from './pages/ManageFamily';
 import AddFamilyMember from './pages/AddFamilyMember';
 import Invite from './pages/Invite';
 import Navbar from './components/Navbar';
-
+import CircleDetails from './pages/CircleDetails';
 // Navigation items for bottom navbar
 const navItems = [
   { label: 'Home', path: '/' },
@@ -45,6 +45,7 @@ const App: React.FC = () => {
             <Route path="/circles" element={<TrustedCircles />} />
             <Route path="/create-circle" element={<CreateCircle />} />
             <Route path="/join-circle" element={<JoinCircle />} />
+            <Route path="/circles/:circleId" element={<CircleDetails />} />
 
             {/* Family & invites */}
             <Route path="/manage-family" element={<ManageFamily />} />
