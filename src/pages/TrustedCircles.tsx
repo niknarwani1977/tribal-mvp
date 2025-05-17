@@ -12,11 +12,8 @@ const TrustedCircles: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    // Log the current user ID for debugging
     console.log('TrustedCircles: current user', user.uid);
-    // Query circles where the current user is the owner
     const q = query(collection(db, 'circles'), where('ownerId', '==', user.uid));
-    // Subscribe to real-time updates
     const unsub = onSnapshot(q, snap => {
       const cs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       console.log('TrustedCircles: fetched circles', cs);
@@ -25,23 +22,35 @@ const TrustedCircles: React.FC = () => {
     return unsub;
   }, [user]);
 
-  // Remove an invite by deleting the invite document
   const revokeInvite = async (circleId: string, inviteId: string) => {
     await deleteDoc(doc(db, 'circles', circleId, 'invites', inviteId));
   };
 
-  // Prompt unauthenticated users to log in
   if (!user) {
     return (
       <div className="p-4 text-center">
-        Please <button onClick={() => navigate('/login')} className="text-blue-600 underline">log in</button> to see your circles.
+        Please{' '}
+        <button onClick={() => navigate('/login')} className="text-blue-600 underline">
+          log in
+        </button>{' '}
+        to see your circles.
       </div>
     );
   }
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4">Your Circles</h2>
+      {/* Header with create button */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Your Circles</h2>
+        <button
+          onClick={() => navigate('/create-circle')}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          + New Circle
+        </button>
+      </div>
+
       {circles.length === 0 ? (
         <div className="text-gray-600">
           You have no circles yet.{' '}
@@ -55,8 +64,16 @@ const TrustedCircles: React.FC = () => {
         </div>
       ) : (
         circles.map(c => (
-          <div key={c.id} className="mb-6 p-4 border rounded">
-            <h3 className="font-medium text-lg">{c.name}</h3>
+          <div key={c.id} className="mb-6 p-4 border rounded-lg shadow-sm">
+            <div className="flex justify-between items-center">
+              <h3 className="font-medium text-lg">{c.name}</h3>
+              <button
+                onClick={() => navigate(`/circles/${c.id}`)}
+                className="text-blue-600 hover:underline text-sm"
+              >
+                Manage
+              </button>
+            </div>
             <div className="mt-2">
               <strong>Invites:</strong>
               <InvitesList circleId={c.id} onRevoke={revokeInvite} />
@@ -73,7 +90,6 @@ const InvitesList: React.FC<{ circleId: string; onRevoke: (c: string, i: string)
   const [invites, setInvites] = useState<any[]>([]);
 
   useEffect(() => {
-    // Subscribe to the invites subcollection under this circle
     const q = collection(db, 'circles', circleId, 'invites');
     const unsub = onSnapshot(q, snap =>
       setInvites(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })))
@@ -82,7 +98,6 @@ const InvitesList: React.FC<{ circleId: string; onRevoke: (c: string, i: string)
   }, [circleId]);
 
   if (invites.length === 0) {
-    // Empty state if there are no pending invites
     return <div className="text-gray-500 mt-2">No pending invites.</div>;
   }
 
@@ -91,9 +106,13 @@ const InvitesList: React.FC<{ circleId: string; onRevoke: (c: string, i: string)
       {invites.map(inv => (
         <li key={inv.id} className="flex justify-between items-center">
           <span>
-            {inv.email} <span className="text-sm text-gray-500">({inv.status})</span>
+            {inv.email}{' '}
+            <span className="text-sm text-gray-500">({inv.status})</span>
           </span>
-          <button onClick={() => onRevoke(circleId, inv.id)} className="text-red-500">
+          <button
+            onClick={() => onRevoke(circleId, inv.id)}
+            className="text-red-500 hover:underline text-sm"
+          >
             Revoke
           </button>
         </li>
