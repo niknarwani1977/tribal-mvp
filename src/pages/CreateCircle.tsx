@@ -1,78 +1,77 @@
 // src/pages/CreateCircle.tsx
+// Component to create a new circle and send an invite link
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, auth } from "../firebase";
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+import { auth, db } from '../firebase';
+import { collection, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const CreateCircle: React.FC = () => {
-  const [circleName, setCircleName] = useState('');
-  const [error, setError] = useState('');
+  // Local state for circle name and email invitation
+  const [name, setName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
   const navigate = useNavigate();
 
-  const handleCreateCircle = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not logged in');
+    const user = auth.currentUser;
+    if (!user) return; // Ensure user is authenticated
 
-      // Create a new circle in Firestore
-      const circleRef = await addDoc(collection(db, "circles"), {
-        name: circleName,
-        createdByUID: user.uid,
-        createdAt: new Date()
-      });
+    // 1. Create a new circle document
+    const circlesRef = collection(db, 'circles');
+    const circleDoc = await addDoc(circlesRef, {
+      name,                   // Name of the circle
+      ownerId: user.uid,      // Record owner as current user
+      createdAt: serverTimestamp() // Server timestamp for creation
+    });
+    const circleId = circleDoc.id;
 
-      // Update the user's Firestore document to reference the new circle
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        circleId: circleRef.id
-      });
+    // 2. Add the owner to the members subcollection
+    await setDoc(doc(db, 'circles', circleId, 'members', user.uid), {
+      role: 'owner',          // Owner role grants full permissions
+      joinedAt: serverTimestamp() // Timestamp when owner joined
+    });
 
-      alert("Circle created successfully!");
-      navigate('/'); // Redirect to home or dashboard
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message);
-    }
+    // 3. Generate invite token and write invite document
+    const token = crypto.randomUUID();
+    await addDoc(collection(db, 'circles', circleId, 'invites'), {
+      email: inviteEmail,     // Invitee's email
+      token,                  // Unique token for joining
+      invitedBy: user.uid,    // Who sent the invite
+      status: 'pending',      // Invite status
+      sentAt: serverTimestamp() // Timestamp of invite
+    });
+
+    // Show link to invite and navigate back to circles list
+    alert(`Circle created! Share this link to invite: ${window.location.origin}/join-circle?token=${token}`);
+    navigate('/circles');
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#fef9f4]">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center">
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">Create a New Circle</h2>
-          <p className="mt-2 text-sm text-gray-600">Build your trusted group today.</p>
-        </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleCreateCircle}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="circleName" className="sr-only">Circle Name</label>
-              <input
-                id="circleName"
-                name="circleName"
-                type="text"
-                required
-                className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#004b6e] focus:border-[#004b6e] focus:z-10 sm:text-sm"
-                placeholder="Enter Circle Name"
-                value={circleName}
-                onChange={(e) => setCircleName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#004b6e] hover:bg-[#003b56] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#004b6e]"
-            >
-              Create Circle
-            </button>
-          </div>
-        </form>
-      </div>
+    <div className="p-6 max-w-md mx-auto bg-white rounded shadow">
+      <h2 className="text-xl font-semibold mb-4">Create New Circle</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Circle Name Input */}
+        <input
+          type="text"
+          placeholder="Circle Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          required
+          className="w-full border p-2 rounded"
+        />
+        {/* Invite Email Input */}
+        <input
+          type="email"
+          placeholder="Invite Member Email"
+          value={inviteEmail}
+          onChange={e => setInviteEmail(e.target.value)}
+          required
+          className="w-full border p-2 rounded"
+        />
+        <button type="submit" className="w-full py-2 bg-blue-600 text-white rounded">
+          Create Circle & Invite
+        </button>
+      </form>
     </div>
   );
 };
