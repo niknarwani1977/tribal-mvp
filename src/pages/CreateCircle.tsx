@@ -1,12 +1,12 @@
 // src/pages/CreateCircle.tsx
-// Component to create a new circle and send an invite link
+// Component to create a new circle, write it to Firestore, and email an invite link via Netlify Function
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { collection, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const CreateCircle: React.FC = () => {
-  // Local state for circle name and email invitation
+  // Local form state
   const [name, setName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const navigate = useNavigate();
@@ -14,35 +14,53 @@ const CreateCircle: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const user = auth.currentUser;
-    if (!user) return; // Ensure user is authenticated
+    if (!user) return; // must be logged in
 
-    // 1. Create a new circle document
-    const circlesRef = collection(db, 'circles');
-    const circleDoc = await addDoc(circlesRef, {
-      name,                   // Name of the circle
-      ownerId: user.uid,      // Record owner as current user
-      createdAt: serverTimestamp() // Server timestamp for creation
+    // 1️⃣ Create Circle doc
+    const circleRef = await addDoc(collection(db, 'circles'), {
+      name,
+      ownerId: user.uid,
+      createdAt: serverTimestamp(),
     });
-    const circleId = circleDoc.id;
+    const circleId = circleRef.id;
 
-    // 2. Add the owner to the members subcollection
+    // 2️⃣ Add owner to members subcollection
     await setDoc(doc(db, 'circles', circleId, 'members', user.uid), {
-      role: 'owner',          // Owner role grants full permissions
-      joinedAt: serverTimestamp() // Timestamp when owner joined
+      role: 'owner',
+      joinedAt: serverTimestamp(),
     });
 
-    // 3. Generate invite token and write invite document
+    // 3️⃣ Create invite record in Firestore
     const token = crypto.randomUUID();
     await addDoc(collection(db, 'circles', circleId, 'invites'), {
-      email: inviteEmail,     // Invitee's email
-      token,                  // Unique token for joining
-      invitedBy: user.uid,    // Who sent the invite
-      status: 'pending',      // Invite status
-      sentAt: serverTimestamp() // Timestamp of invite
+      email: inviteEmail,
+      token,
+      invitedBy: user.uid,
+      status: 'pending',
+      sentAt: serverTimestamp(),
     });
 
-    // Show link to invite and navigate back to circles list
-    alert(`Circle created! Share this link to invite: ${window.location.origin}/join-circle?token=${token}`);
+    // 4️⃣ Call Netlify Function to send the email
+    try {
+      await fetch('/.netlify/functions/sendCircleInvite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail,
+          circleName: name,
+          token,
+        }),
+      });
+      alert('Circle created & invite email sent! 🚀');
+    } catch (err) {
+      console.error('Failed to send invite email:', err);
+      alert(
+        'Circle created, but email failed. Share this link manually:\n' +
+        `${window.location.origin}/join-circle?token=${token}`
+      );
+    }
+
+    // 5️⃣ Navigate back to your circles list
     navigate('/circles');
   };
 
