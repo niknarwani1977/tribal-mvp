@@ -1,5 +1,5 @@
 // netlify/functions/sendCircleInvite.js
-// A Netlify Function that sends a circle-invite email via SendGrid
+// A Netlify Function that sends a circle‐invite email via SendGrid
 
 const sgMail = require('@sendgrid/mail')
 
@@ -8,20 +8,23 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
 /**
  * Handler invoked by Netlify when POSTed to /.netlify/functions/sendCircleInvite
- * Expects a JSON body with: { email, circleName, token }
+ * Expects a JSON body with: { email, circleName, token, origin? }
  */
 exports.handler = async (event) => {
   try {
-    // Parse the incoming request body
-    const { email, circleName, token } = JSON.parse(event.body)
+    // Parse the incoming request body (now including origin)
+    const { email, circleName, token, origin } = JSON.parse(event.body)
+
+    // Determine base URL: branch-preview origin or fallback to APP_URL
+    const baseUrl = origin || process.env.APP_URL
 
     // Build the URL your users will click to join the circle
-    const inviteLink = `${process.env.APP_URL}/join-circle?token=${token}`
+    const inviteLink = `${baseUrl}/join-circle?token=${token}`
 
     // Compose the email
     const msg = {
       to: email,
-      from: 'nikhil77@gmail.com',
+      from: 'nikhil77@gmail.com', // your verified sender
       subject: `Invite to join “${circleName}” on TribalConnect`,
       html: `
         <p>Hello,</p>
