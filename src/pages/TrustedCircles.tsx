@@ -1,6 +1,7 @@
 // src/pages/TrustedCircles.tsx
 // Lists all circles the signed-in user belongs to by querying
-// every circles/*/members subcollection for docs whose ID == current user UID.
+// the 'members' subcollections across all circles (collectionGroup).
+// Includes debug logs to trace auth and snapshot events.
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -28,38 +29,45 @@ const TrustedCircles: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('TrustedCircles: component mounted');
     let unsubscribeMembers: (() => void) | null = null;
 
-    // 1️⃣ Listen to auth state changes
+    // Listen for authentication state changes
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      console.log('TrustedCircles: auth state changed:', user?.uid || 'no user');
+
       if (!user) {
-        // Not signed in → send to login
+        // If not signed in, redirect to login
+        console.log('TrustedCircles: user not authenticated, redirecting');
         navigate('/login');
         return;
       }
 
-      // Signed in → build a collectionGroup query on members where docID == user.uid
+      // User is signed in, query membership docs where doc ID == user.uid
       const membersQ = query(
         collectionGroup(db, 'members'),
         where('__name__', '==', user.uid)
       );
 
-      // 2️⃣ Subscribe to real-time member docs
-      //    Unsubscribe any previous listener first
+      // Clean up any previous listener
       if (unsubscribeMembers) unsubscribeMembers();
 
+      // Subscribe to real-time updates for the membership query
       unsubscribeMembers = onSnapshot(
         membersQ,
         async (snapshot) => {
+          console.log('TrustedCircles: membership snapshot received, count=', snapshot.docs.length);
           try {
-            // 3️⃣ For each member doc, fetch its parent circle
-            const circlesData = await Promise.all(
+            // For each membership document, fetch its parent circle doc
+            const loadedCircles = await Promise.all(
               snapshot.docs.map(async (memDoc) => {
-                // memDoc.ref.parent is the 'members' collection
-                // memDoc.ref.parent.parent is the circle doc reference
                 const circleRef = memDoc.ref.parent.parent as DocumentReference;
+                console.log('TrustedCircles: fetching circle:', circleRef.id);
                 const circleSnap = await getDoc(circleRef);
-                if (!circleSnap.exists()) return null;
+                if (!circleSnap.exists()) {
+                  console.warn('TrustedCircles: circle does not exist:', circleRef.id);
+                  return null;
+                }
                 const data = circleSnap.data();
                 return {
                   id: circleRef.id,
@@ -69,41 +77,47 @@ const TrustedCircles: React.FC = () => {
               })
             );
 
-            // Filter out any nulls and update state
-            setCircles(circlesData.filter(Boolean));
+            // Filter out nulls and update state
+            const validCircles = loadedCircles.filter(Boolean) as Circle[];
+            console.log('TrustedCircles: loaded circles:', validCircles);
+            setCircles(validCircles);
             setLoading(false);
           } catch (err: any) {
-            console.error('Error loading circles:', err);
+            console.error('TrustedCircles: error loading circles:', err);
             setError('Failed to load your circles.');
             setLoading(false);
           }
         },
         (err) => {
-          console.error('Membership subscription error:', err);
+          console.error('TrustedCircles: subscription error:', err);
           setError('Failed to load your circles.');
           setLoading(false);
         }
       );
     });
 
-    // Cleanup both listeners on unmount
+    // Cleanup listeners on unmount
     return () => {
+      console.log('TrustedCircles: cleanup');
       unsubscribeAuth();
       if (unsubscribeMembers) unsubscribeMembers();
     };
   }, [navigate]);
 
-  // Render
+  // Render based on state
   if (loading) {
+    console.log('TrustedCircles: still loading...');
     return <div className="p-6 text-center">Loading your circles…</div>;
   }
   if (error) {
+    console.log('TrustedCircles: error state:', error);
     return (
       <div className="p-6 text-center text-red-600">
         <p>{error}</p>
       </div>
     );
   }
+
   return (
     <div className="p-6">
       <h2 className="text-xl font-semibold mb-4 text-[#004b6e]">Your Circles</h2>
