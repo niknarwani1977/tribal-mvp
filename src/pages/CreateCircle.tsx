@@ -46,10 +46,11 @@ const CreateCircle: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: inviteEmail,
-          circleName: name,
-          token,
-        }),
+       email: inviteEmail,
+       circleName: name,
+       token,
+       origin: window.location.origin   // <-- include the active URL
+   }),
       });
       alert('Circle created & invite email sent! 🚀');
     } catch (err) {
