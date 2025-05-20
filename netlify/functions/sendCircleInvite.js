@@ -21,7 +21,7 @@ exports.handler = async (event) => {
     // Compose the email
     const msg = {
       to: email,
-      from: 'no-reply@tribalconnect.app',
+      from: 'nikhil77@gmail.com',
       subject: `Invite to join “${circleName}” on TribalConnect`,
       html: `
         <p>Hello,</p>
