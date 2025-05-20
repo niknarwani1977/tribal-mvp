@@ -1,19 +1,14 @@
 // src/pages/JoinCircle.tsx
-// Page that handles accepting a circle-invite via a token link.
-// 1. Reads the `token` query parameter.
-// 2. Waits for the user to be authenticated (redirects to login if not).
-// 3. Finds the matching invite in Firestore.
-// 4. Adds the current user as a member of the invited circle.
-// 5. Marks the invite document as “accepted”.
-// 6. Redirects the user into the Circles list.
+// Page to accept a circle invite via token
+//  • Reads the token from the URL
+//  • If not signed in, prompts to sign in with Google (in-place)
+//  • Once signed in, finds the invite, adds you as a member, marks it accepted
+//  • Redirects you back to /circles when done
 
-// React / Router imports
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-
-// Firebase imports
-import { auth, db } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db, googleProvider } from '../firebase';
+import { signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import {
   collectionGroup,
   query,
@@ -26,101 +21,93 @@ import {
 } from 'firebase/firestore';
 
 const JoinCircle: React.FC = () => {
-  // Grab the `token` from the URL: /join-circle?token=...
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
-
+  const token = searchParams.get('token') || '';
   const navigate = useNavigate();
 
-  // Track current state of the join flow
-  const [status, setStatus] = useState<
-    'loading' | 'unauthenticated' | 'error' | 'success'
-  >('loading');
+  // status: loading → needSignIn → error → success
+  const [status, setStatus] = useState<'loading'|'needSignIn'|'error'|'success'>('loading');
   const [message, setMessage] = useState<string>('');
 
+  // Kick off the join flow whenever auth state changes
   useEffect(() => {
-    // If no token provided, error out immediately
     if (!token) {
       setStatus('error');
       setMessage('No invite token provided.');
       return;
     }
 
-    // Listen for authentication state changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      // If user is not signed in, prompt them to login
       if (!user) {
-        setStatus('unauthenticated');
+        // Not signed in yet
+        setStatus('needSignIn');
         return;
       }
 
-      // User is signed in, proceed to accept the invite
+      // Signed in – proceed to join
       setStatus('loading');
       try {
-        // 1️⃣ Query all "invites" subcollections for a matching token
-        const invitesQuery = query(
-          collectionGroup(db, 'invites'),
-          where('token', '==', token)
-        );
-        const inviteSnap = await getDocs(invitesQuery);
+        // 1️⃣ Find the invite doc by token across ALL circles/*/invites
+        const invitesRef = collectionGroup(db, 'invites');
+        const q = query(invitesRef, where('token', '==', token));
+        const snap = await getDocs(q);
 
-        if (inviteSnap.empty) {
+        if (snap.empty) {
           throw new Error('Invite not found or already used.');
         }
+        const inviteDoc = snap.docs[0];
 
-        // We take the first matching document
-        const inviteDoc = inviteSnap.docs[0];
-
-        // Retrieve the parent circle ID from the document path:
-        // path: /circles/{circleId}/invites/{inviteId}
+        // 2️⃣ Derive the circle ID from the invite’s path
         const circleId = inviteDoc.ref.parent.parent!.id;
 
-        // 2️⃣ Add the user to the members subcollection of that circle
-        const memberRef = doc(db, 'circles', circleId, 'members', user.uid);
-        await setDoc(memberRef, {
+        // 3️⃣ Create membership under circles/{circleId}/members/{user.uid}
+        await setDoc(doc(db, 'circles', circleId, 'members', user.uid), {
           role: 'member',
           joinedAt: serverTimestamp(),
         });
 
-        // 3️⃣ Mark the invite as accepted so it can’t be reused
+        // 4️⃣ Mark the invite as accepted
         await updateDoc(inviteDoc.ref, { status: 'accepted' });
 
-        // Success! Notify and redirect
+        // Done!
         setStatus('success');
-        setMessage('You’ve successfully joined the circle! Redirecting…');
-
-        // Wait a moment so the user can see the confirmation
-        setTimeout(() => {
-          navigate('/circles');
-        }, 2000);
+        setMessage('🎉 You’ve joined the circle! Redirecting…');
+        setTimeout(() => navigate('/circles'), 2000);
       } catch (err: any) {
-        // Handle any errors (e.g., network, missing token, Firestore permissions)
         setStatus('error');
         setMessage(err.message || 'An unexpected error occurred.');
       }
     });
 
-    // Clean up the auth listener when the component unmounts
     return unsubscribe;
   }, [token, navigate]);
 
-  // Render different UI based on status
+  // Handler to pop up Google login without leaving the page
+  const handleGoogleSignIn = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will fire again and pick up the join logic
+    } catch (err: any) {
+      console.error('Google sign-in failed:', err);
+      setStatus('error');
+      setMessage('Google sign-in failed. Please try again.');
+    }
+  };
+
+  // Render based on status
   if (status === 'loading') {
     return <div className="p-6 text-center">Joining circle…</div>;
   }
-  if (status === 'unauthenticated') {
+  if (status === 'needSignIn') {
     return (
       <div className="p-6 text-center">
-        <p>
-          Please{' '}
-          <button
-            onClick={() => navigate('/login')}
-            className="text-blue-600 underline"
-          >
-            sign in
-          </button>{' '}
-          to accept your invite.
-        </p>
+        <p className="mb-4">You need to sign in to accept your invite.</p>
+        <button
+          onClick={handleGoogleSignIn}
+          className="px-6 py-2 bg-[#004b6e] text-white rounded-md hover:bg-[#003b56]"
+        >
+          Sign in with Google
+        </button>
       </div>
     );
   }
@@ -138,7 +125,6 @@ const JoinCircle: React.FC = () => {
       </div>
     );
   }
-
   return null;
 };
 
