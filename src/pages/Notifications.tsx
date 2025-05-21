@@ -1,30 +1,23 @@
-// src/pages/Notifications.tsx
-// Page to display and manage notifications for circles the user belongs to.
-// Features:
-//  • Fetches user circle memberships on auth and subscribes to notifications
-//  • Displays each notification with timestamp and read/unread status
-//  • Allows marking individual notifications as read
-//  • Provides "Mark All as Read" action
+// src/pages/NotificationsPage.tsx
 
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged } from 'firebase/auth';
 import {
-  collectionGroup,
   collection,
+  getDocs,
+  getDoc,
+  doc,
   query,
   where,
   orderBy,
   onSnapshot,
-  updateDoc,
-  doc,
-  arrayUnion,
-  Timestamp,
-  getDocs,
+  Timestamp
 } from 'firebase/firestore';
+import Spinner from '@/components/ui/Spinner'; // Replace with your Spinner component
 
-interface Notification {
+// Type definition for a notification record
+export interface NotificationRecord {
   id: string;
   circleId: string;
   message: string;
@@ -32,153 +25,156 @@ interface Notification {
   readBy: string[];
 }
 
-const Notifications: React.FC = () => {
-  const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+/**
+ * NotificationsPage
+ * -----------------
+ * Displays real-time notifications for all circles the user belongs to.
+ * Implements robust auth state handling, parallel membership checks, and real-time Firestore subscription.
+ */
+const NotificationsPage: React.FC = () => {
+  // Authenticated Firebase user
+  const [user, setUser] = useState<User | null>(null);
+  // Indicates when auth has been resolved (success or null)
+  const [authReady, setAuthReady] = useState(false);
+
+  // IDs of circles the current user belongs to
+  const [circleIds, setCircleIds] = useState<string[]>([]);
+  // Loaded notifications for those circles
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  // UI state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
+  // 1️⃣ Listen for Firebase Auth state changes
   useEffect(() => {
-    let unsubAuth: () => void;
-    let unsubNotifs: () => void = () => {};
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthReady(true);
+    });
+    // Cleanup on unmount
+    return unsubscribe;
+  }, []);
 
-    unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        navigate('/login');
-        return;
+  // 2️⃣ Once auth is ready and user is present, fetch circle membership IDs in parallel
+  useEffect(() => {
+    if (!authReady || !user) {
+      // Either still loading auth or user is not signed in
+      if (authReady && !user) {
+        // If auth resolved but no user, stop loading to show error
+        setLoading(false);
+        setError('You must be signed in to view notifications.');
       }
+      return;
+    }
 
+    setLoading(true);
+    setError('');
+
+    (async () => {
       try {
-        // 1️⃣ Fetch membership docs once
-        const memSnap = await getDocs(
-          query(collectionGroup(db, 'members'), where('__name__', '==', user.uid))
-        );
-        const circleIds = memSnap.docs.map(d => d.ref.parent.parent!.id);
+        // Fetch all circles
+        const circlesSnap = await getDocs(collection(db, 'circles'));
+        // Check membership subcollection in parallel
+        const membershipPromises = circlesSnap.docs.map(async (cDoc) => {
+          const memberSnap = await getDoc(
+            doc(db, 'circles', cDoc.id, 'members', user.uid)
+          );
+          return memberSnap.exists() ? cDoc.id : null;
+        });
 
-        if (circleIds.length === 0) {
-          setNotifications([]);
-          setLoading(false);
-          return;
-        }
+        const results = await Promise.all(membershipPromises);
+        const ids = results.filter((id): id is string => Boolean(id));
+        setCircleIds(ids);
+      } catch (fetchErr: any) {
+        console.error('Error fetching circle memberships:', fetchErr);
+        setError('Failed to load your circle memberships.');
+        setLoading(false);
+      }
+    })();
+  }, [authReady, user]);
 
-        // 2️⃣ Subscribe to notifications for those circles
-        const notifsQ = query(
-          collection(db, 'notifications'),
-          where('circleId', 'in', circleIds),
-          orderBy('createdAt', 'desc')
-        );
+  // 3️⃣ Subscribe to notifications when circleIds update
+  useEffect(() => {
+    if (!user || circleIds.length === 0) {
+      // Nothing to subscribe to or no memberships
+      // If memberships loaded but array empty, stop loading
+      if (authReady && circleIds.length === 0) {
+        setLoading(false);
+      }
+      return;
+    }
 
-        unsubNotifs = onSnapshot(
-          notifsQ,
-          (notifSnap) => {
-            const loaded = notifSnap.docs.map(d => {
-              const data = d.data();
-              return {
-                id: d.id,
-                circleId: data.circleId,
-                message: data.message,
-                createdAt: data.createdAt,
-                readBy: data.readBy || [],
-              } as Notification;
-            });
-            setNotifications(loaded);
-            setLoading(false);
-          },
-          (err) => {
-            console.error('Notifications subscription error:', err);
-            setError('Failed to load notifications.');
-            setLoading(false);
-          }
-        );
-      } catch (err: any) {
-        console.error('Error loading memberships or notifications:', err);
+    setError('');
+
+    // Build an 'in' query on notifications for user’s circles
+    const notifQuery = query(
+      collection(db, 'notifications'),
+      where('circleId', 'in', circleIds),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      notifQuery,
+      (snapshot) => {
+        const notifs: NotificationRecord[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<NotificationRecord, 'id'>)
+        }));
+        setNotifications(notifs);
+        setLoading(false);
+      },
+      (subErr) => {
+        console.error('Notifications subscription error:', subErr);
         setError('Failed to load notifications.');
         setLoading(false);
       }
-    });
-
-    // Cleanup
-    return () => {
-      unsubAuth();
-      unsubNotifs();
-    };
-  }, [navigate]);
-
-  const markAsRead = async (notif: Notification) => {
-    const user = auth.currentUser;
-    if (!user) return;
-    await updateDoc(doc(db, 'notifications', notif.id), {
-      readBy: arrayUnion(user.uid),
-    });
-  };
-
-  const markAllRead = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-    await Promise.all(
-      notifications.map(notif => {
-        if (notif.readBy.includes(user.uid)) return Promise.resolve();
-        return updateDoc(doc(db, 'notifications', notif.id), {
-          readBy: arrayUnion(user.uid),
-        });
-      })
     );
-  };
 
+    // Cleanup Firestore listener on unmount or circleIds change
+    return () => unsubscribe();
+  }, [authReady, user, circleIds]);
+
+  // Render UI states
   if (loading) {
-    return <div className="p-6 text-center">Loading notifications…</div>;
+    return (
+      <div className="p-6 text-center">
+        <Spinner />
+        <p className="mt-2">Loading notifications…</p>
+      </div>
+    );
   }
+
   if (error) {
-    return <div className="p-6 text-center text-red-600">{error}</div>;
+    return (
+      <div className="p-6 text-center text-red-600">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (notifications.length === 0) {
+    return (
+      <div className="p-6 text-center">
+        <p>No notifications yet.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Notifications</h2>
-        <button
-          onClick={markAllRead}
-          className="text-sm text-[#004b6e] hover:underline"
-        >
-          Mark All Read
-        </button>
-      </div>
-
-      {notifications.length === 0 ? (
-        <p className="text-center text-gray-600">No notifications.</p>
-      ) : (
-        <ul className="space-y-4">
-          {notifications.map(notif => {
-            const user = auth.currentUser!;
-            const isRead = notif.readBy.includes(user.uid);
-            return (
-              <li
-                key={notif.id}
-                className={`p-4 border rounded-lg flex justify-between items-start ${
-                  isRead ? 'bg-gray-100' : 'bg-white'
-                }`}
-              >
-                <div>
-                  <p className="text-sm text-gray-700">{notif.message}</p>
-                  <p className="text-xs text-gray-400">
-                    {notif.createdAt.toDate().toLocaleString()}
-                  </p>
-                </div>
-                {!isRead && (
-                  <button
-                    onClick={() => markAsRead(notif)}
-                    className="text-blue-600 text-sm hover:underline"
-                  >
-                    Mark Read
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold">Notifications</h1>
+      <ul className="space-y-2">
+        {notifications.map((n) => (
+          <li key={n.id} className="p-4 bg-white rounded shadow">
+            <p className="font-medium">{n.message}</p>
+            <p className="text-sm text-gray-500">
+              {n.createdAt.toDate().toLocaleString()}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
 
-export default Notifications;
+export default NotificationsPage;
