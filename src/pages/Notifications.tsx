@@ -1,177 +1,183 @@
 // src/pages/Notifications.tsx
-import React, { useEffect, useState } from 'react';
-import { db, auth } from "../firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+// Page to display and manage notifications for circles the user belongs to.
+// Features:
+//  • Subscribes in real-time to notifications for user's circles
+//  • Displays each notification with timestamp and circle context
+//  • Allows marking individual notifications as read
+//  • Provides "Mark All as Read" action
 
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+  collection,
+  collectionGroup,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+  updateDoc,
+  doc,
+  arrayUnion,
+  Timestamp,
+  DocumentData,
+} from 'firebase/firestore';
+
+// TypeScript interface for a notification
 interface Notification {
   id: string;
+  circleId: string;
   message: string;
-  createdAt: any;
+  createdAt: Timestamp;
+  readBy?: string[];  // array of user UIDs who have read this
 }
 
 const Notifications: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const navigate = useNavigate();
 
   useEffect(() => {
-  const fetchAndMarkNotifications = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not logged in');
+    let unsubAuth: (() => void) | null = null;
+    let unsubNotifs: (() => void) | null = null;
 
-      // Fetch user's Circle ID
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (!userDocSnap.exists()) {
-        throw new Error('User document not found');
+    // 1️⃣ Wait for auth state
+    unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // If not signed in, redirect to login
+        navigate('/login');
+        return;
       }
 
-      const userData = userDocSnap.data();
-      const circleId = userData.circleId;
-      if (!circleId) {
-        throw new Error('User is not part of a Circle');
-      }
+      // 2️⃣ Query membership docs to get circle IDs
+      try {
+        const membersQ = query(
+          collectionGroup(db, 'members'),
+          where('__name__', '==', user.uid)
+        );
+        const membershipSnap = await onSnapshot(membersQ, async (memSnap) => {
+          const circleIds = memSnap.docs.map(doc => doc.ref.parent.parent!.id);
 
-      // Query all notifications for this Circle
-      const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
-      const querySnapshot = await getDocs(q);
+          if (circleIds.length === 0) {
+            setNotifications([]);
+            setLoading(false);
+            return;
+          }
 
-      const fetchedNotifications: Notification[] = [];
-
-      // Prepare to update unread notifications
-      for (const docSnap of querySnapshot.docs) {
-        const notifData = docSnap.data();
-
-        fetchedNotifications.push({
-          id: docSnap.id,
-          ...notifData,
-        } as Notification);
-
-        // If user hasn't read this notification yet, update Firestore
-        if (!notifData.readBy || !notifData.readBy.includes(user.uid)) {
-          const notifRef = doc(db, "notifications", docSnap.id);
-          await updateDoc(notifRef, {
-            readBy: [...(notifData.readBy || []), user.uid],
+          // 3️⃣ Subscribe to notifications for those circles
+          const notifsQ = query(
+            collection(db, 'notifications'),
+            where('circleId', 'in', circleIds),
+            orderBy('createdAt', 'desc')
+          );
+          unsubNotifs = onSnapshot(notifsQ, (notifSnap) => {
+            const loaded: Notification[] = notifSnap.docs.map(d => {
+              const data = d.data() as DocumentData;
+              return {
+                id: d.id,
+                circleId: data.circleId,
+                message: data.message,
+                createdAt: data.createdAt,
+                readBy: data.readBy || [],
+              };
+            });
+            setNotifications(loaded);
+            setLoading(false);
           });
-        }
+        });
+      } catch (err: any) {
+        console.error('Error subscribing to notifications:', err);
+        setError('Failed to load notifications.');
+        setLoading(false);
       }
+    });
 
-      // Update state with notifications
-      setNotifications(fetchedNotifications);
-    } catch (error: any) {
-      console.error(error.message);
-    } finally {
-      setLoading(false);
-    }
+    // Cleanup
+    return () => {
+      if (unsubAuth) unsubAuth();
+      if (unsubNotifs) unsubNotifs();
+    };
+  }, [navigate]);
+
+  /**
+   * Mark a single notification as read by adding current user UID to its readBy array.
+   */
+  const markAsRead = async (notif: Notification) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const notifRef = doc(db, 'notifications', notif.id);
+    await updateDoc(notifRef, {
+      readBy: arrayUnion(user.uid)
+    });
   };
 
-  fetchAndMarkNotifications();
-}, []);
+  /**
+   * Mark all notifications as read for this user.
+   */
+  const markAllRead = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const batchPromises = notifications.map(notif => {
+      if (notif.readBy?.includes(user.uid)) return Promise.resolve();
+      const notifRef = doc(db, 'notifications', notif.id);
+      return updateDoc(notifRef, { readBy: arrayUnion(user.uid) });
+    });
+    await Promise.all(batchPromises);
+  };
 
-
+  if (loading) {
+    return <div className="p-6 text-center">Loading notifications…</div>;
+  }
+  if (error) {
+    return <div className="p-6 text-center text-red-600">{error}</div>;
+  }
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 bg-[#fef9f4]">
-      <div className="w-full max-w-md py-8 space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900 text-center">Notifications</h1>
-
-        {loading ? (
-          <p className="text-gray-600 text-center">Loading...</p>
-        ) : notifications.length === 0 ? (
-          <p className="text-gray-600 text-center">No notifications yet.</p>
-        ) : (
-          <ul className="space-y-4">
-            {notifications.map((notif) => (
-              <li key={notif.id} className="p-4 rounded-lg bg-white shadow-md text-gray-700">
-                {notif.message}
-              </li>
-            ))}
-          </ul>
-        )}
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Notifications</h2>
+        <button
+          onClick={markAllRead}
+          className="text-sm text-[#004b6e] hover:underline"
+        >
+          Mark All Read
+        </button>
       </div>
+
+      {notifications.length === 0 ? (
+        <p className="text-center text-gray-600">No notifications.</p>
+      ) : (
+        <ul className="space-y-4">
+          {notifications.map(notif => {
+            const isRead = auth.currentUser && notif.readBy?.includes(auth.currentUser.uid);
+            return (
+              <li
+                key={notif.id}
+                className={`p-4 border rounded-lg flex justify-between items-start ${isRead ? 'bg-gray-100' : 'bg-white'}`}
+              >
+                <div>
+                  <p className="text-sm text-gray-700">{notif.message}</p>
+                  <p className="text-xs text-gray-400">
+                    {notif.createdAt.toDate().toLocaleString()}
+                  </p>
+                </div>
+                {!isRead && (
+                  <button
+                    onClick={() => markAsRead(notif)}
+                    className="text-blue-600 text-sm hover:underline"
+                  >
+                    Mark Read
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 };
 
 export default Notifications;
-
-
-
-
-/*import React from 'react';
-import { Bell } from 'lucide-react';
-import type { Notification } from '../types';
-
-const Notifications = () => {
-  const notifications: Notification[] = [
-    {
-      id: '1',
-      type: 'event_response',
-      message: 'John accepted to pick up Sarah from soccer practice',
-      read: false,
-      createdAt: '2024-03-20T14:30:00',
-    },
-    {
-      id: '2',
-      type: 'event_request',
-      message: 'New event request from Emma\'s circle',
-      read: false,
-      createdAt: '2024-03-20T11:30:00',
-    },
-    {
-      id: '3',
-      type: 'traffic_alert',
-      message: 'Heavy traffic reported on route to Soccer Practice',
-      read: true,
-      createdAt: '2024-03-20T10:15:00',
-    },
-  ];
-
-  return (
-    <div className="p-4 space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-          <p className="text-gray-600">Stay updated with your circles</p>
-        </div>
-        <Bell className="w-6 h-6 text-gray-500" />
-      </header>
-
-      <div className="space-y-4">
-        {notifications.map((notification) => (
-          <div
-            key={notification.id}
-            className={`bg-white p-4 rounded-lg shadow-sm ${
-              !notification.read ? 'border-l-4 border-[#ff7e47]' : ''
-            }`}
-          >
-            <div className="flex items-start space-x-3">
-              <div
-                className={`w-2 h-2 rounded-full mt-2 ${
-                  notification.type === 'event_response'
-                    ? 'bg-[#004b6e]'
-                    : notification.type === 'event_request'
-                    ? 'bg-[#ff7e47]'
-                    : 'bg-yellow-500'
-                }`}
-              />
-              <div className="flex-1">
-                <p className="text-sm">{notification.message}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {new Date(notification.createdAt).toLocaleString('en-US', {
-                    hour: 'numeric',
-                    minute: 'numeric',
-                    hour12: true,
-                  })}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-export default Notifications;*/
