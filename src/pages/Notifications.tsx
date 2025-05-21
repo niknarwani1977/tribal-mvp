@@ -99,54 +99,15 @@ const NotificationsPage: React.FC = () => {
     setLoading(true);
     setError('');
 
+    // Build Firestore query to fetch notifications for user’s circles (no orderBy to avoid index requirement)
     const notifQuery = query(
       collection(db, 'notifications'),
-      where('circleId', 'in', circleIds),
-      orderBy('createdAt', 'desc')
+      where('circleId', 'in', circleIds)
     );
 
     // Real-time subscription
     const unsubscribe = onSnapshot(
       notifQuery,
-      (snapshot) => {
-        const notifs = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<NotificationRecord, 'id'>)
-        }));
-        setNotifications(notifs);
-        setLoading(false);
-      },
-      async (subErr) => {
-        console.warn('Realtime subscription failed, falling back:', subErr);
-        try {
-          // Static fetch for each circleId
-          let staticList: NotificationRecord[] = [];
-          for (const cid of circleIds) {
-            const snap = await getDocs(
-              query(
-                collection(db, 'notifications'),
-                where('circleId', '==', cid),
-                orderBy('createdAt', 'desc')
-              )
-            );
-            staticList.push(...snap.docs.map((d) => ({
-              id: d.id,
-              ...(d.data() as Omit<NotificationRecord, 'id'>)
-            })));
-          }
-          // Sort by newest first
-          staticList.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-          setNotifications(staticList);
-        } catch (fetchErr) {
-          console.error('Static fetch failed:', fetchErr);
-          setError('Failed to load notifications.');
-        } finally {
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => unsubscribe();
   }, [authReady, user, circleIds]);
 
   // Render states
