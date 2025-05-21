@@ -33,29 +33,26 @@ export interface NotificationRecord {
  * Uses onSnapshot for real-time updates; falls back to static fetch on error.
  */
 const NotificationsPage: React.FC = () => {
-  // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-
-  // Circle IDs the user is a member of
   const [circleIds, setCircleIds] = useState<string[]>([]);
-  // Notification list
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
-
-  // UI state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
-  // 1️⃣ Listen for Firebase Auth state changes
+  console.log('Rendering NotificationsPage', { user, authReady, circleIds, loading, error, notifications });
+
+  // 1️⃣ Auth listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, firebaseUser => {
+      console.log('Auth state changed:', firebaseUser);
       setUser(firebaseUser);
       setAuthReady(true);
     });
     return unsubscribe;
   }, []);
 
-  // 2️⃣ Fetch circle membership IDs when auth resolves
+  // 2️⃣ Fetch circle membership IDs
   useEffect(() => {
     if (!authReady) return;
     if (!user) {
@@ -65,19 +62,16 @@ const NotificationsPage: React.FC = () => {
     }
     setLoading(true);
     setError('');
-
     (async () => {
       try {
         const circlesSnap = await getDocs(collection(db, 'circles'));
-        const membership = await Promise.all(
-          circlesSnap.docs.map(async (cDoc) => {
-            const mSnap = await getDoc(
-              doc(db, 'circles', cDoc.id, 'members', user.uid)
-            );
-            return mSnap.exists() ? cDoc.id : null;
-          })
-        );
-        const ids = membership.filter((id): id is string => Boolean(id));
+        const membershipChecks = circlesSnap.docs.map(async cDoc => {
+          const memberSnap = await getDoc(doc(db, 'circles', cDoc.id, 'members', user.uid));
+          return memberSnap.exists() ? cDoc.id : null;
+        });
+        const results = await Promise.all(membershipChecks);
+        const ids = results.filter((id): id is string => Boolean(id));
+        console.log('Fetched circleIds:', ids);
         setCircleIds(ids);
       } catch (e) {
         console.error('Error fetching memberships:', e);
@@ -87,30 +81,66 @@ const NotificationsPage: React.FC = () => {
     })();
   }, [authReady, user]);
 
-  // 3️⃣ Subscribe to notifications or fallback to static fetch
+  // 3️⃣ Subscribe to notifications or static fallback
   useEffect(() => {
     if (!authReady || !user) return;
     if (circleIds.length === 0) {
+      console.log('No circleIds to subscribe to.');
       setNotifications([]);
       setLoading(false);
       return;
     }
-
     setLoading(true);
     setError('');
-
-    // Build Firestore query to fetch notifications for user’s circles (no orderBy to avoid index requirement)
     const notifQuery = query(
       collection(db, 'notifications'),
-      where('circleId', 'in', circleIds)
+      where('circleId', 'in', circleIds),
+      orderBy('createdAt', 'desc')
     );
-
-    // Real-time subscription
+    console.log('Attempting real-time subscription for:', circleIds);
     const unsubscribe = onSnapshot(
       notifQuery,
+      snapshot => {
+        const notifs = snapshot.docs.map(d => ({
+          id: d.id,
+          ...(d.data() as Omit<NotificationRecord, 'id'>)
+        }));
+        console.log('Realtime notifications received:', notifs);
+        setNotifications(notifs);
+        setLoading(false);
+      },
+      async subErr => {
+        console.warn('Realtime subscription failed, falling back:', subErr);
+        try {
+          let staticList: NotificationRecord[] = [];
+          for (const cid of circleIds) {
+            const snap = await getDocs(
+              query(
+                collection(db, 'notifications'),
+                where('circleId', '==', cid)
+              )
+            );
+            staticList.push(
+              ...snap.docs.map(d => ({
+                id: d.id,
+                ...(d.data() as Omit<NotificationRecord, 'id'>)
+              }))
+            );
+          }
+          staticList.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+          console.log('Static notifications fetched:', staticList);
+          setNotifications(staticList);
+        } catch (fetchErr) {
+          console.error('Static fetch failed:', fetchErr);
+          setError('Failed to load notifications.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
+    return () => unsubscribe();
   }, [authReady, user, circleIds]);
 
-  // Render states
   if (loading) {
     return (
       <div className="p-6 text-center">
@@ -133,13 +163,11 @@ const NotificationsPage: React.FC = () => {
       </div>
     );
   }
-
-  // Main UI
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">Notifications</h1>
       <ul className="space-y-2">
-        {notifications.map((n) => (
+        {notifications.map(n => (
           <li key={n.id} className="p-4 bg-white rounded shadow">
             <p className="font-medium">{n.message}</p>
             <p className="text-sm text-gray-500">
