@@ -20,40 +20,46 @@ interface Circle {
 }
 
 const TrustedCircles: React.FC = () => {
+  // State to hold joined circles
   const [circles, setCircles] = useState<Circle[]>([]);
+  // Loading / error state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 1. Listen for auth state
+    // Listen for Firebase Auth state
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        // If not logged in, redirect
+        // Not authenticated => redirect to login
         navigate('/login');
         return;
       }
 
       try {
-        // 2. Fetch all circles
+        setLoading(true);
+
+        // 1. Fetch all circles
         const circlesSnapshot = await getDocs(collection(db, 'circles'));
 
-        // 3. For each circle, check if user is a member
+        // 2. Filter circles where current user is a member
         const joinedCircles: Circle[] = [];
         for (const circleDoc of circlesSnapshot.docs) {
-          const circleData = circleDoc.data() as any;
+          const data = circleDoc.data() as any;
+
+          // Check membership subcollection for this user
           const memberRef = doc(db, 'circles', circleDoc.id, 'members', user.uid);
           const memberSnap = await getDoc(memberRef);
           if (memberSnap.exists()) {
             joinedCircles.push({
               id: circleDoc.id,
-              name: circleData.name,
-              ownerId: circleData.ownerId,
+              name: data.name,
+              ownerId: data.ownerId,
             });
           }
         }
 
-        // 4. Update state
+        // 3. Update state
         setCircles(joinedCircles);
         setLoading(false);
       } catch (err: any) {
@@ -63,13 +69,15 @@ const TrustedCircles: React.FC = () => {
       }
     });
 
+    // Cleanup on unmount
     return () => unsubscribeAuth();
   }, [navigate]);
 
-  // Render loading, error, or list
+  // Show loading spinner while fetching
   if (loading) {
     return <div className="p-6 text-center">Loading your circles…</div>;
   }
+  // Show error message if fetch failed
   if (error) {
     return (
       <div className="p-6 text-center text-red-600">
@@ -81,6 +89,20 @@ const TrustedCircles: React.FC = () => {
   return (
     <div className="p-6">
       <h2 className="text-xl font-semibold mb-4 text-[#004b6e]">Your Circles</h2>
+
+      {/*
+        Robust "Add New Circle" button: always visible once authenticated.
+        Navigates to the CreateCircle page/route.
+      */}
+      <div className="mb-6">
+        <button
+          onClick={() => navigate('/create-circle')}
+          className="px-4 py-2 bg-[#004b6e] text-white rounded-md hover:bg-[#003b56]"
+        >
+          Add New Circle
+        </button>
+      </div>
+
       {circles.length === 0 ? (
         <div className="text-center">
           <p>You have no circles yet.</p>
