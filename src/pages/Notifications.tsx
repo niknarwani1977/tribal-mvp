@@ -14,7 +14,9 @@ import {
   onSnapshot,
   Timestamp
 } from 'firebase/firestore';
-import Spinner from '@/components/ui/Spinner'; // Replace with your Spinner component
+// Import a Spinner or fallback to a simple inline loader
+// If you have a Spinner component, adjust the path accordingly. Otherwise, we define a local spinner below.
+// import Spinner from '@/components/ui/Spinner';
 
 // Type definition for a notification record
 export interface NotificationRecord {
