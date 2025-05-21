@@ -70,7 +70,7 @@ const NotificationsPage: React.FC = () => {
         const circlesSnap = await getDocs(collection(db, 'circles'));
         const membershipIds = await Promise.all(
           circlesSnap.docs.map(async (cDoc) => {
-            const mSnap = await getDoc(doc(db, 'circles', cDoc.id, 'users', user.uid)));
+            const mSnap = await getDoc(doc(db, 'circles', cDoc.id, 'users', user.uid));
             return mSnap.exists() ? cDoc.id : null;
           })
         );
