@@ -1,36 +1,39 @@
 // src/components/Navbar.tsx
-// Bottom navigation bar component that renders dynamic nav items
-// and conditionally shows a notification badge on the "Notifications" link.
+// Bottom navigation bar that dynamically shows nav items based on authentication state
 
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
-// Define what a navigation item looks like
 interface NavItem {
   label: string;
   path: string;
 }
 
 interface NavbarProps {
+  // Primary nav items to show when signed in
   items: NavItem[];
 }
 
 const Navbar: React.FC<NavbarProps> = ({ items }) => {
-  const location = useLocation(); // Track current route for active styles
-  const [hasNewNotifications, setHasNewNotifications] = useState(false);
+  const location = useLocation();
 
+  // Track authentication state
+  const [user, setUser] = useState(auth.currentUser);
   useEffect(() => {
-    // Check for unread notifications whenever the route changes
+    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    return () => unsub();
+  }, []);
+
+  // Track unread notifications for the notifications badge
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
+  useEffect(() => {
+    if (!user) return;
     const fetchNotifications = async () => {
       try {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        // Assume notifications are stored with a circleId field
-        // This logic can be customized based on your schema
-        // For simplicity, query all notifications for the user
+        // Query unread notifications where 'readBy' does not include this user
         const notifQ = query(
           collection(db, 'notifications'),
           where('readBy', 'not-in', [user.uid])
@@ -41,22 +44,26 @@ const Navbar: React.FC<NavbarProps> = ({ items }) => {
         console.error('Error fetching notifications:', err);
       }
     };
-
     fetchNotifications();
-  }, [location]);
+  }, [user, location]);
+
+  // Build the list of nav entries: if not signed in, only show Login
+  const navEntries: NavItem[] = user
+    ? items
+    : [{ label: 'Login', path: '/login' }];
 
   return (
     <nav className="bg-[#004b6e] fixed bottom-0 w-full z-50 flex justify-around py-3 text-white text-xs sm:text-sm">
-      {items.map(item => {
+      {navEntries.map((item) => {
         const isActive = location.pathname === item.path;
         const baseClasses = 'hover:text-gray-300';
         const activeClasses = isActive ? 'font-semibold' : '';
 
-        // For the Notifications link, show a badge if unread
+        // Handle notifications entry separately to show badge
         if (item.path === '/notifications') {
           return (
             <div key={item.path} className="relative">
-              <Link to={item.path} className={`${baseClasses} ${activeClasses}`}>
+              <Link to={item.path} className={`${baseClasses} ${activeClasses}`}> 
                 {item.label}
               </Link>
               {hasNewNotifications && (
