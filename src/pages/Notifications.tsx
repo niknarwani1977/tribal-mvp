@@ -1,10 +1,6 @@
 // src/pages/Notifications.tsx
 // Page to display and manage notifications for circles the user belongs to.
-// Features:
-//  • Subscribes in real-time to notifications for user's circles
-//  • Displays each notification with timestamp and read/unread status
-//  • Allows marking individual notifications as read
-//  • Provides "Mark All as Read" action
+// Enhanced with debug logs to trace subscription flow.
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +20,6 @@ import {
   DocumentData,
 } from 'firebase/firestore';
 
-// TypeScript interface for a notification
 interface Notification {
   id: string;
   circleId: string;
@@ -40,54 +35,52 @@ const Notifications: React.FC = () => {
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
+    console.log('Notifications: effect mount');
     let unsubAuth: () => void;
     let unsubMembers: () => void = () => {};
     let unsubNotifs: () => void = () => {};
 
-    // Listen for auth state changes
     unsubAuth = onAuthStateChanged(auth, (user) => {
+      console.log('Notifications: auth state changed', user?.uid);
       if (!user) {
-        // Redirect to login if not authenticated
+        console.log('Notifications: no user, redirect');
         navigate('/login');
         return;
       }
 
-      // Query membership docs to get circle IDs
+      // Subscribe to membership
       const memQ = query(
         collectionGroup(db, 'members'),
         where('__name__', '==', user.uid)
       );
-
-      // Subscribe to membership changes
+      console.log('Notifications: subscribing to members');
       unsubMembers = onSnapshot(
         memQ,
         (memSnap) => {
-          const circleIds = memSnap.docs.map((d) =>
-            d.ref.parent.parent!.id
-          );
+          console.log('Notifications: memSnap docs:', memSnap.docs.length);
+          const circleIds = memSnap.docs.map(d => d.ref.parent.parent!.id);
+          console.log('Notifications: circleIds:', circleIds);
 
           if (circleIds.length === 0) {
-            // No circles → no notifications
+            console.log('Notifications: no circles, clear');
             setNotifications([]);
             setLoading(false);
             return;
           }
 
-          // Query notifications for those circles, ordered by newest
+          // Subscribe to notifications for those circles
           const notifsQ = query(
             collection(db, 'notifications'),
             where('circleId', 'in', circleIds),
             orderBy('createdAt', 'desc')
           );
-
-          // Unsubscribe previous notifications listener
+          console.log('Notifications: subscribing to notifications');
           unsubNotifs();
-
-          // Subscribe to notifications
           unsubNotifs = onSnapshot(
             notifsQ,
             (notifSnap) => {
-              const loaded: Notification[] = notifSnap.docs.map((d) => {
+              console.log('Notifications: notifSnap docs:', notifSnap.docs.length);
+              const loaded: Notification[] = notifSnap.docs.map(d => {
                 const data = d.data() as DocumentData;
                 return {
                   id: d.id,
@@ -115,28 +108,28 @@ const Notifications: React.FC = () => {
       );
     });
 
-    // Cleanup subscriptions on unmount
     return () => {
+      console.log('Notifications: cleanup');
       unsubAuth();
       unsubMembers();
       unsubNotifs();
     };
   }, [navigate]);
 
-  /** Mark a single notification as read */
   const markAsRead = async (notif: Notification) => {
     const user = auth.currentUser;
     if (!user) return;
+    console.log('Notifications: markAsRead', notif.id);
     const notifRef = doc(db, 'notifications', notif.id);
     await updateDoc(notifRef, {
       readBy: arrayUnion(user.uid),
     });
   };
 
-  /** Mark all notifications as read */
   const markAllRead = async () => {
     const user = auth.currentUser;
     if (!user) return;
+    console.log('Notifications: markAllRead');
     await Promise.all(
       notifications.map((notif) => {
         if (notif.readBy.includes(user.uid)) return Promise.resolve();
@@ -157,10 +150,7 @@ const Notifications: React.FC = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Notifications</h2>
-        <button
-          onClick={markAllRead}
-          className="text-sm text-[#004b6e] hover:underline"
-        >
+        <button onClick={markAllRead} className="text-sm text-[#004b6e] hover:underline">
           Mark All Read
         </button>
       </div>
@@ -173,23 +163,13 @@ const Notifications: React.FC = () => {
             const user = auth.currentUser!;
             const isRead = notif.readBy.includes(user.uid);
             return (
-              <li
-                key={notif.id}
-                className={`p-4 border rounded-lg flex justify-between items-start ${
-                  isRead ? 'bg-gray-100' : 'bg-white'
-                }`}
-              >
+              <li key={notif.id} className={`p-4 border rounded-lg flex justify-between items-start ${isRead ? 'bg-gray-100' : 'bg-white'}`}>
                 <div>
                   <p className="text-sm text-gray-700">{notif.message}</p>
-                  <p className="text-xs text-gray-400">
-                    {notif.createdAt.toDate().toLocaleString()}
-                  </p>
+                  <p className="text-xs text-gray-400">{notif.createdAt.toDate().toLocaleString()}</p>
                 </div>
                 {!isRead && (
-                  <button
-                    onClick={() => markAsRead(notif)}
-                    className="text-blue-600 text-sm hover:underline"
-                  >
+                  <button onClick={() => markAsRead(notif)} className="text-blue-600 text-sm hover:underline">
                     Mark Read
                   </button>
                 )}
