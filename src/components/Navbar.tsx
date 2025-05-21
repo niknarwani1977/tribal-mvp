@@ -1,67 +1,81 @@
 // src/components/Navbar.tsx
+// Bottom navigation bar component that renders dynamic nav items
+// and conditionally shows a notification badge on the "Notifications" link.
+
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { db, auth } from "../firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { auth, db } from '../firebase';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
-const Navbar: React.FC = () => {
+// Define what a navigation item looks like
+interface NavItem {
+  label: string;
+  path: string;
+}
+
+interface NavbarProps {
+  items: NavItem[];
+}
+
+const Navbar: React.FC<NavbarProps> = ({ items }) => {
+  const location = useLocation(); // Track current route for active styles
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
-  const location = useLocation(); // Track current route
 
   useEffect(() => {
+    // Check for unread notifications whenever the route changes
     const fetchNotifications = async () => {
       try {
         const user = auth.currentUser;
         if (!user) return;
 
-        // Fetch user's Circle ID
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          const circleId = userData.circleId;
-
-          if (!circleId) return;
-
-          // Query for notifications related to user's Circle
-          const q = query(collection(db, "notifications"), where("circleId", "==", circleId));
-          const querySnapshot = await getDocs(q);
-
-          // Check if there are any notifications not yet read by this user
-          let newNotifications = false;
-          querySnapshot.forEach((doc) => {
-            const notifData = doc.data();
-            if (!notifData.readBy || !notifData.readBy.includes(user.uid)) {
-              newNotifications = true;
-            }
-          });
-
-          setHasNewNotifications(newNotifications);
-        }
-      } catch (error) {
-        console.error("Error checking notifications:", error);
+        // Assume notifications are stored with a circleId field
+        // This logic can be customized based on your schema
+        // For simplicity, query all notifications for the user
+        const notifQ = query(
+          collection(db, 'notifications'),
+          where('readBy', 'not-in', [user.uid])
+        );
+        const snap = await getDocs(notifQ);
+        setHasNewNotifications(!snap.empty);
+      } catch (err) {
+        console.error('Error fetching notifications:', err);
       }
     };
 
     fetchNotifications();
-  }, [location]); // Re-run check whenever location changes
+  }, [location]);
 
   return (
     <nav className="bg-[#004b6e] fixed bottom-0 w-full z-50 flex justify-around py-3 text-white text-xs sm:text-sm">
-      <Link to="/login" className="hover:text-gray-300">Login</Link>
-      <Link to="/invite" className="hover:text-gray-300">Invite</Link>
-      <Link to="/circles" className="hover:text-gray-300">Circles</Link>
-      <Link to="/calendar" className="hover:text-gray-300">Calendar</Link>
-      <Link to="/create-event" className="hover:text-gray-300">Create Event</Link>
+      {items.map(item => {
+        const isActive = location.pathname === item.path;
+        const baseClasses = 'hover:text-gray-300';
+        const activeClasses = isActive ? 'font-semibold' : '';
 
-      {/* Notifications Link with Red Dot if needed */}
-      <Link to="/notifications" className="relative hover:text-gray-300">
-        Notifications
-        {hasNewNotifications && (
-          <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500"></span>
-        )}
-      </Link>
+        // For the Notifications link, show a badge if unread
+        if (item.path === '/notifications') {
+          return (
+            <div key={item.path} className="relative">
+              <Link to={item.path} className={`${baseClasses} ${activeClasses}`}>
+                {item.label}
+              </Link>
+              {hasNewNotifications && (
+                <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500"></span>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <Link
+            key={item.path}
+            to={item.path}
+            className={`${baseClasses} ${activeClasses}`}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 };
