@@ -8,6 +8,6 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    port: 80 // This will make it use localhost without a port
+    port: 5173 // Updated to match the authorized domain in Firebase
   }
 });
