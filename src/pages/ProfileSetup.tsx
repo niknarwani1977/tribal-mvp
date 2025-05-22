@@ -5,19 +5,19 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { User, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/Spinner';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Spinner } from '../components/ui/Spinner';
 
 /**
  * ProfileSetup
  * ------------
  * Page for new users to complete their profile (name, phone).
  * - Checks if the user is authenticated.
- * - If profile already exists, redirects to /circles.
- * - Otherwise shows form to collect fullName and phone.
- * - On submit, updates Firebase Auth displayName and saves to Firestore users collection.
+ * - If a profile doc already exists, redirects to /circles.
+ * - Otherwise shows a form to collect fullName and phone.
+ * - On submit, updates Auth displayName and saves profile in Firestore.
  */
 const ProfileSetup: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -27,45 +27,40 @@ const ProfileSetup: React.FC = () => {
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
 
-  // Listen for auth state and check existing profile
+  // 1️⃣ Listen for auth state and check for existing profile
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
-        // Not signed in → redirect to login
         navigate('/login');
         return;
       }
       setUser(u);
-      // Check if profile document exists
       const profileSnap = await getDoc(doc(db, 'users', u.uid));
       if (profileSnap.exists()) {
-        // Profile already set up → go to circles
         navigate('/circles');
       } else {
-        // Show form
         setLoading(false);
       }
     });
     return () => unsub();
   }, [navigate]);
 
-  // Handle form submission
+  // 2️⃣ Handle form submission to create profile
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setLoading(true);
     setError('');
     try {
-      // 1️⃣ Update Firebase Auth displayName
+      // Update Firebase Auth profile
       await updateProfile(user, { displayName: fullName });
-      // 2️⃣ Create Firestore user profile document
+      // Create Firestore profile doc
       await setDoc(doc(db, 'users', user.uid), {
         fullName,
         email: user.email,
         phone,
         createdAt: serverTimestamp(),
       });
-      // 3️⃣ Redirect to circles after setup
       navigate('/circles');
     } catch (err: any) {
       console.error('Profile setup error:', err);
@@ -74,7 +69,7 @@ const ProfileSetup: React.FC = () => {
     }
   };
 
-  // Show spinner while loading
+  // 3️⃣ Loading state while checking profile
   if (loading) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -83,6 +78,7 @@ const ProfileSetup: React.FC = () => {
     );
   }
 
+  // 4️⃣ Render profile form
   return (
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Complete Your Profile</h1>
