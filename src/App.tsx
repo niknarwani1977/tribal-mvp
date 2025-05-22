@@ -1,8 +1,15 @@
 // src/App.tsx
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+
+// Pages
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ProfileSetup from './pages/ProfileSetup';
 import HomePage from './pages/HomePage';
 import TrustedCircles from './pages/TrustedCircles';
 import CalendarView from './pages/CalendarView';
@@ -14,8 +21,11 @@ import JoinCircle from './pages/JoinCircle';
 import ManageFamily from './pages/ManageFamily';
 import AddFamilyMember from './pages/AddFamilyMember';
 import Invite from './pages/Invite';
-import Navbar from './components/Navbar';
 import CircleDetails from './pages/CircleDetails';
+
+// Component
+import Navbar from './components/Navbar';
+
 // Navigation items for bottom navbar
 const navItems = [
   { label: 'Home', path: '/' },
@@ -24,40 +34,104 @@ const navItems = [
   { label: 'Notifications', path: '/notifications' },
 ];
 
+/**
+ * App
+ * ---
+ * Handles global routing and authentication-based redirection:
+ * - Redirects unauthenticated users to /login
+ * - New users without profile to /profile-setup
+ * - Returning users to /circles
+ * Renders all public and protected routes.
+ */
 const App: React.FC = () => {
-  return (
-    <Router>
-      <div className="min-h-screen bg-[#fef9f4]">
-        <div className="max-w-md mx-auto pb-20">
-          <Routes>
-            {/* Authentication */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+  const navigate = useNavigate();
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-            {/* Main application */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/calendar" element={<CalendarView />} />
-            <Route path="/create-event" element={<CreateEvent />} />
-            <Route path="/edit-event/:id" element={<EditEvent />} />
-            <Route path="/notifications" element={<Notifications />} />
+  useEffect(() => {
+    // Listen for auth changes
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // Not signed in → login
+        navigate('/login', { replace: true });
+        setCheckingAuth(false);
+        return;
+      }
+      try {
+        // Check if user profile exists
+        const profileSnap = await getDoc(doc(db, 'users', user.uid));
+        if (profileSnap.exists()) {
+          // Profile present → go to circles
+          navigate('/circles', { replace: true });
+        } else {
+          // No profile → setup
+          navigate('/profile-setup', { replace: true });
+        }
+      } catch (err) {
+        console.error('Error checking profile:', err);
+        // Default fallback
+        navigate('/circles', { replace: true });
+      } finally {
+        setCheckingAuth(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [navigate]);
 
-            {/* Circle management */}
-            <Route path="/circles" element={<TrustedCircles />} />
-            <Route path="/create-circle" element={<CreateCircle />} />
-            <Route path="/join-circle" element={<JoinCircle />} />
-            <Route path="/circles/:circleId" element={<CircleDetails />} />
-
-            {/* Family & invites */}
-            <Route path="/manage-family" element={<ManageFamily />} />
-            <Route path="/add-family-member" element={<AddFamilyMember />} />
-            <Route path="/invite" element={<Invite />} />
-          </Routes>
-        </div>
-        {/* Bottom nav bar */}
-        <Navbar items={navItems} />
+  // Show loading state while redirecting
+  if (checkingAuth) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p>Loading...</p>
       </div>
-    </Router>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#fef9f4]">
+      <div className="max-w-md mx-auto pb-20">
+        <Routes>
+          {/* Authentication & Onboarding */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/profile-setup" element={<ProfileSetup />} />
+
+          {/* Main application routes */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/calendar" element={<CalendarView />} />
+          <Route path="/create-event" element={<CreateEvent />} />
+          <Route path="/edit-event/:id" element={<EditEvent />} />
+          <Route path="/notifications" element={<Notifications />} />
+
+          {/* Circle management */}
+          <Route path="/circles" element={<TrustedCircles />} />
+          <Route path="/create-circle" element={<CreateCircle />} />
+          <Route path="/join-circle" element={<JoinCircle />} />
+          <Route path="/circles/:circleId" element={<CircleDetails />} />
+
+          {/* Family & invites */}
+          <Route path="/manage-family" element={<ManageFamily />} />
+          <Route path="/add-family-member" element={<AddFamilyMember />} />
+          <Route path="/invite" element={<Invite />} />
+
+          {/* Fallback: redirect unknown to circles */}
+          <Route path="*" element={<Navigate to="/circles" replace />} />
+        </Routes>
+      </div>
+      {/* Bottom navigation bar */}
+      <Navbar items={navItems} />
+    </div>
   );
 };
 
-export default App;
+/**
+ * WrappedApp
+ * ----------
+ * We wrap App in Router so useNavigate works inside App component.
+ */
+const WrappedApp: React.FC = () => (
+  <Router>
+    <App />
+  </Router>
+);
+
+export default WrappedApp;
