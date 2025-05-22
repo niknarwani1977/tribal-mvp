@@ -9,6 +9,8 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  updateDoc,
+  arrayUnion,
   Timestamp
 } from 'firebase/firestore';
 
@@ -25,7 +27,7 @@ export interface NotificationRecord {
 
 /**
  * Notifications component: lists real-time notifications for circles
- * where the current user is a member (under 'members').
+ * where the current user is a member, and allows marking as read.
  */
 const Notifications: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -35,20 +37,22 @@ const Notifications: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
+  // 1️⃣ Listen for auth state
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      console.log('Auth state changed:', u);
       setUser(u);
       setAuthReady(true);
     });
     return unsub;
   }, []);
 
+  // 2️⃣ Fetch circle membership IDs once auth is ready
   useEffect(() => {
-    if (!authReady) return;
-    if (!user) {
-      setError('You must sign in to view notifications.');
-      setLoading(false);
+    if (!authReady || !user) {
+      if (authReady && !user) {
+        setError('You must sign in to view notifications.');
+        setLoading(false);
+      }
       return;
     }
 
@@ -65,7 +69,6 @@ const Notifications: React.FC = () => {
           })
         );
         const ids = memberships.filter((x): x is string => !!x);
-        
         setCircleIds(ids);
       } catch (e) {
         console.error('Error fetching circle memberships:', e);
@@ -75,6 +78,7 @@ const Notifications: React.FC = () => {
     })();
   }, [authReady, user]);
 
+  // 3️⃣ Subscribe to notifications and filter client-side
   useEffect(() => {
     if (!authReady || !user) return;
     if (!circleIds.length) {
@@ -89,11 +93,13 @@ const Notifications: React.FC = () => {
     const unsub = onSnapshot(
       collection(db, 'notifications'),
       (snap) => {
-        const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<NotificationRecord, 'id'>) }));
-        console.log('All notifications:', all);
-        const filtered = all.filter((n) => circleIds.includes(n.circleId));
-        console.log('Filtered notifications:', filtered);
-        filtered.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+        const all: NotificationRecord[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<NotificationRecord, 'id'>)
+        }));
+        const filtered = all
+          .filter((n) => circleIds.includes(n.circleId))
+          .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
         setNotifications(filtered);
         setLoading(false);
       },
@@ -122,9 +128,27 @@ const Notifications: React.FC = () => {
       <h1 className="text-2xl font-bold">Notifications</h1>
       <ul className="space-y-2">
         {notifications.map((n) => (
-          <li key={n.id} className="p-4 bg-white rounded shadow">
+          <li key={n.id} className="p-4 bg-white rounded shadow space-y-2">
             <p className="font-medium">{n.message}</p>
-            <p className="text-sm text-gray-500">{n.createdAt.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}</p>
+            <p className="text-sm text-gray-500">
+              {n.createdAt
+                .toDate()
+                .toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}
+            </p>
+            <button
+              onClick={async () => {
+                if (!user) return;
+                const notifRef = doc(db, 'notifications', n.id);
+                await updateDoc(notifRef, { readBy: arrayUnion(user.uid) });
+                // Optimistic update
+                n.readBy.push(user.uid);
+                setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item } : item)));
+              }}
+              disabled={n.readBy.includes(user?.uid || '')}
+              className="text-blue-500 hover:underline text-sm"
+            >
+              {n.readBy.includes(user?.uid || '') ? 'Read ✓' : 'Mark as read'}
+            </button>
           </li>
         ))}
       </ul>
