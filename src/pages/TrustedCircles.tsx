@@ -4,19 +4,21 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 
-interface Circle {
+// Extended Circle interface now includes unread notification count
+type Circle = {
   id: string;
   name: string;
   ownerId: string;
-}
+  unread: number;
+};
 
 /**
  * TrustedCircles
  * --------------
- * Lists all circles the current user owns or belongs to.
- * Logs debug info for each circle to help diagnose membership issues.
+ * Fetches all circles in Firestore and displays only those
+ * where the current user is owner or member, with an unread badge.
  */
 const TrustedCircles: React.FC = () => {
   const [circles, setCircles] = useState<Circle[]>([]);
@@ -25,46 +27,62 @@ const TrustedCircles: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Subscribe to auth state changes
+    // Subscribe to Firebase Auth changes
     const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
       if (!user) {
-        // If not authenticated, redirect to login
+        // Redirect unauthenticated users
         navigate('/login');
         return;
       }
 
       setLoading(true);
       setError('');
-      try {
-        // Fetch all circles
-        const circleSnapshot = await getDocs(collection(db, 'circles'));
-        const joined: Circle[] = [];
 
-        // Check ownership or membership for each circle
+      try {
+        // 1️⃣ Fetch all circles
+        const circleSnapshot = await getDocs(collection(db, 'circles'));
+        const joinedBasic = [] as Omit<Circle, 'unread'>[];
+
+        // 2️⃣ Determine owner or membership
         for (const circleDoc of circleSnapshot.docs) {
           const data = circleDoc.data() as any;
           const circleId = circleDoc.id;
 
-          // Owner check
           const isOwner = data.ownerId === user.uid;
-          // Membership check in 'members' subcollection
           const memberSnap = await getDoc(
             doc(db, 'circles', circleId, 'members', user.uid)
           );
           const isMember = memberSnap.exists();
 
-          // Include if owner or member
           if (isOwner || isMember) {
-            joined.push({
+            joinedBasic.push({
               id: circleId,
               name: data.name,
-              ownerId: data.ownerId,
+              ownerId: data.ownerId
             });
           }
         }
 
-       
-        setCircles(joined);
+        // 3️⃣ Compute unread notification counts
+        const circlesWithUnread = await Promise.all(
+          joinedBasic.map(async (c) => {
+            const notifSnap = await getDocs(
+              query(
+                collection(db, 'notifications'),
+                where('circleId', '==', c.id)
+              )
+            );
+            // Count those not yet read by this user
+            const unreadCount = notifSnap.docs.filter((d) => {
+              const rd = (d.data() as any).readBy as string[];
+              return !rd?.includes(user.uid);
+            }).length;
+            return { ...c, unread: unreadCount };
+          })
+        );
+
+        // Update state
+        setCircles(circlesWithUnread);
       } catch (e: any) {
         console.error('Error loading circles:', e);
         setError('Failed to load your circles.');
@@ -77,22 +95,17 @@ const TrustedCircles: React.FC = () => {
   }, [navigate]);
 
   if (loading) {
-    return (
-      <div className="p-6 text-center">Loading your circles…</div>
-    );
+    return <div className="p-6 text-center">Loading your circles…</div>;
   }
-
   if (error) {
-    return (
-      <div className="p-6 text-center text-red-600">{error}</div>
-    );
+    return <div className="p-6 text-center text-red-600">{error}</div>;
   }
 
   return (
     <div className="p-6">
       <h2 className="text-xl font-semibold mb-4">Your Circles</h2>
 
-      {/* Create Circle button always visible when signed-in */}
+      {/* Always allow creating new circles */}
       <button
         onClick={() => navigate('/create-circle')}
         className="mb-6 px-4 py-2 bg-blue-700 text-white rounded"
@@ -112,12 +125,20 @@ const TrustedCircles: React.FC = () => {
         </div>
       ) : (
         <ul className="space-y-3">
-          {circles.map(c => (
+          {circles.map((c) => (
             <li
               key={c.id}
               className="p-4 bg-white rounded shadow flex justify-between items-center"
             >
-              <span className="font-medium">{c.name}</span>
+              <span className="font-medium flex items-center">
+                {c.name}
+                {/* Show unread badge if there are new notifications */}
+                {c.unread > 0 && (
+                  <span className="ml-2 inline-block bg-red-500 text-white text-xs font-semibold rounded-full px-2">
+                    {c.unread}
+                  </span>
+                )}
+              </span>
               <button
                 onClick={() => navigate(`/circles/${c.id}`)}
                 className="text-blue-600 hover:underline"
