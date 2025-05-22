@@ -1,8 +1,8 @@
 // src/pages/Login.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { AlertCircle } from 'lucide-react';
 
@@ -10,25 +10,29 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    // Check for redirect result when component mounts
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          console.log('Logged in as:', result.user);
+          navigate('/calendar');
+        }
+      })
+      .catch((err) => {
+        console.error('Login error:', err);
+        setError('An error occurred during login. Please try again.');
+      });
+  }, [navigate]);
+
   const handleGoogleLogin = async () => {
     try {
       setError(null);
-      const result = await signInWithPopup(auth, googleProvider);
-      console.log('Logged in as:', result.user);
-      navigate('/calendar');
+      await signInWithRedirect(auth, googleProvider);
+      // The page will redirect to Google and then come back
     } catch (err: any) {
       console.error('Google login error:', err);
-      
-      if (err.code === 'auth/popup-blocked') {
-        setError(
-          'The login popup was blocked by your browser. Please enable popups for this site and try again. You may need to:\n\n' +
-          '1. Check your browser\'s popup settings\n' +
-          '2. Disable any ad blockers for this site\n' +
-          '3. Look for a popup notification at the top of your browser'
-        );
-      } else {
-        setError('An error occurred during login. Please try again.');
-      }
+      setError('An error occurred during login. Please try again.');
     }
   };
 
