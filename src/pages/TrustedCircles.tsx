@@ -53,11 +53,6 @@ const TrustedCircles: React.FC = () => {
           );
           const isMember = memberSnap.exists();
 
-          // Debug log
-          console.log(
-            `Circle ${circleId}: name=${data.name}, ownerId=${data.ownerId}, isOwner=${isOwner}, isMember=${isMember}`
-          );
-
           // Include if owner or member
           if (isOwner || isMember) {
             joined.push({
@@ -68,8 +63,7 @@ const TrustedCircles: React.FC = () => {
           }
         }
 
-        // Final joined list debug
-        console.log('Final joined circles:', joined.map(c => c.id));
+       
         setCircles(joined);
       } catch (e: any) {
         console.error('Error loading circles:', e);
