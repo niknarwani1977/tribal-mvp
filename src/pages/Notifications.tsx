@@ -37,7 +37,7 @@ const Notifications: React.FC = () => {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      console.log('Auth state changed:', u);
+       // (removed circleIds debug log)
       setUser(u);
       setAuthReady(true);
     });
@@ -90,9 +90,8 @@ const Notifications: React.FC = () => {
       collection(db, 'notifications'),
       (snap) => {
         const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<NotificationRecord, 'id'>) }));
-        console.log('All notifications:', all);
         const filtered = all.filter((n) => circleIds.includes(n.circleId));
-        console.log('Filtered notifications:', filtered);
+         // (removed raw/filtered debug logs)
         filtered.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
         setNotifications(filtered);
         setLoading(false);
