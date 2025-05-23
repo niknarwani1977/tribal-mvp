@@ -197,8 +197,11 @@ const Dashboard = () => {
                       <h4 className="font-medium">{announcement.title}</h4>
                       <p className="text-sm text-neutral-600 line-clamp-2">{announcement.content}</p>
                       <p className="text-xs text-neutral-500 mt-1">
-                        {new Date(announcement.createdAt).toLocaleDateString()}
-                      </p>
+                      {(announcement.createdAt && typeof announcement.createdAt.toDate === 'function'
+                        ? announcement.createdAt.toDate()
+                        : new Date(announcement.createdAt)
+                      ).toLocaleDateString()}
+                    </p>
                     </div>
                   ))}
                 </div>
