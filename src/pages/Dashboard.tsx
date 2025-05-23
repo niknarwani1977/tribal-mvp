@@ -86,17 +86,24 @@ const Dashboard = () => {
                 </div>
               ) : upcomingEvents.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {upcomingEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      id={event.id}
-                      title={event.title}
-                      description={event.description}
-                      date={event.date.toDate()}
-                      location={event.location}
-                      imageUrl={event.imageUrl}
-                    />
-                  ))}
+                 {upcomingEvents.map((event) => (
+                <EventCard
+                  key={event.id}
+                  id={event.id}
+                  title={event.title}
+                  description={event.description}
+                  date={
+                    event.date && typeof event.date.toDate === 'function'
+                      ? event.date.toDate()
+                      : event.date
+                        ? new Date(event.date)
+                        : null
+                  }
+                  location={event.location}
+                  imageUrl={event.imageUrl}
+                />
+              ))}
+
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-md p-6 text-center">
