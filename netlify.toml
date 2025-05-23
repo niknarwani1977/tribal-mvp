@@ -1,3 +1,8 @@
+[[redirects]]
+  from = "/__/auth/*"
+  to = "/__/auth/:splat"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]
