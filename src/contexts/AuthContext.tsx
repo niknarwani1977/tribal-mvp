@@ -64,10 +64,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   // 🔁 Google login (redirect-based)
-function loginWithGoogle() {
+async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  return signInWithPopup(auth, provider);
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error('Google login error:', error);
+    throw error; // Pass error to caller for UI handling
+  }
 }
 
   // 🔁 Password reset
