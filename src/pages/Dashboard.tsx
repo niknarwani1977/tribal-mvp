@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, FileText, Bell, ChevronRight } from 'lucide-react';
 import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../utils/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import EventCard from '../components/events/EventCard';
 

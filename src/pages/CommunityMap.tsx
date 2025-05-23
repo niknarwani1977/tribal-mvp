@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../utils/firebase';
 import MapComponent from '../components/map/MapComponent';
 import { MapPin, Filter, Search } from 'lucide-react';
 

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Calendar, Search, Filter, Plus, ChevronDown } from 'lucide-react';
 import { collection, query, orderBy, getDocs, where, Timestamp } from 'firebase/firestore';
 import { format, isAfter, isBefore, startOfDay, endOfDay, addMonths } from 'date-fns';
-import { db } from '../lib/firebase';
+import { db } from '../utils/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import EventCard from '../components/events/EventCard';
 

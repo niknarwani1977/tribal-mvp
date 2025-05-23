@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { FileText, Search, Filter } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db } from '../utils/firebase';
 import ResourceCard from '../components/resources/ResourceCard';
 
 interface Resource {
