@@ -1,9 +1,7 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getRedirectResult } from 'firebase/auth';
-import { auth } from '../utils/firebase';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -13,51 +11,30 @@ const Login = () => {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
-  // 🚩 Handles the Google sign-in redirect result
-  useEffect(() => {
-    setLoading(true);
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result && result.user) {
-          // User just logged in with Google, redirect!
-          navigate('/dashboard');
-        }
-      })
-      .catch((error) => {
-        if (error?.code !== 'auth/no-auth-event') {
-          setError('Google sign-in failed.');
-          console.error('Google login error:', error);
-        }
-      })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line
-  }, [navigate]);
-
+  // Email/password login handler
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-
     try {
       setError('');
       setLoading(true);
       await login(email, password);
       navigate('/dashboard');
-    } catch (error) {
+    } catch {
       setError('Invalid email or password. Please try again.');
-      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Google login handler
   const handleGoogleLogin = async () => {
     try {
       setError('');
       setLoading(true);
       await loginWithGoogle();
-      // Redirect will happen automatically after successful login
-    } catch (error: any) {
+      navigate('/dashboard');
+    } catch {
       setError('Failed to sign in with Google. Please try again.');
-      console.error('Google login error:', error);
     } finally {
       setLoading(false);
     }
@@ -66,9 +43,7 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-center text-3xl font-bold text-[#23395D]">
-          Welcome back
-        </h2>
+        <h2 className="text-center text-3xl font-bold text-[#23395D]">Welcome back</h2>
         <p className="mt-2 text-center text-sm text-neutral-600">
           Don't have an account?{' '}
           <Link to="/register" className="font-medium text-[#4F8DFD] hover:text-[#4F8DFD]/90">
@@ -177,12 +152,12 @@ const Login = () => {
                 disabled={loading}
                 className="w-full inline-flex justify-center py-2 px-4 border border-neutral-300 rounded-md shadow-sm bg-white text-sm font-medium text-neutral-700 hover:bg-neutral-50"
               >
-                <img 
-                  src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
-                  alt="Google" 
+                <img
+                  src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                  alt="Google"
                   className="h-5 w-5 mr-2"
                 />
-                Google
+                {loading ? 'Signing in...' : 'Google'}
               </button>
             </div>
           </div>
